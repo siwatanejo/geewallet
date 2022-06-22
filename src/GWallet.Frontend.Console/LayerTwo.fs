@@ -516,6 +516,31 @@ module LayerTwo =
                     UserInteraction.PressAnyKeyToContinue()
         }
 
+    let CreateInvoice(): Async<unit>=
+        async {
+            let account = AskLightningAccount None
+            //FIXME: add support for specific expiration date
+            //FIXME: better messages
+            let rec createInvoice password =
+                async {
+                    let amountInSatoshisOpt =
+                        UserInteraction.Ask Convert.ToUInt64 "Enter invoice amount in satoshis"
+                    match amountInSatoshisOpt with
+                    | Some amountInSatoshis ->
+                        let descriptionOpt = UserInteraction.Ask id "Enter invoice description"
+                        match descriptionOpt with
+                        | Some description ->
+                            let invoiceManager = InvoiceManagement (account, password)
+                            let invoiceInString = invoiceManager.CreateInvoice amountInSatoshis description
+                            Console.WriteLine (sprintf "Invoice: %s" invoiceInString)
+                        | None ->
+                            return! createInvoice password
+                    | None ->
+                        return! createInvoice password
+                }
+            do! UserInteraction.TryWithPasswordAsync createInvoice
+        }
+
     let ReceiveLightningEvent(): Async<unit> =
         async {
             let account = AskLightningAccount None

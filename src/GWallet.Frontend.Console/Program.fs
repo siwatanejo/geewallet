@@ -405,6 +405,8 @@ let rec PerformOperation (activeAccounts: seq<IAccount>): unit =
         LayerTwo.SendPayment() |> Async.RunSynchronously
     | Operations.SendHtlcLightningPayment ->
         LayerTwo.SendHtlcPayment() |> Async.RunSynchronously
+    | Operations.CreateInvoice ->
+        LayerTwo.CreateInvoice() |> Async.RunSynchronously
     | Operations.ReceiveLightningEvent ->
         LayerTwo.ReceiveLightningEvent() |> Async.RunSynchronously
     | Operations.CloseChannel ->
