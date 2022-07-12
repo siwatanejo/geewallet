@@ -192,33 +192,6 @@ type internal RecvFulfillOrFailError =
         | SendCommit err -> err.PossibleBug
         | RecvCommit err -> err.PossibleBug
 
-type internal SendMonoHopPaymentError =
-    | InvalidMonoHopPayment of ActiveChannel * InvalidMonoHopUnidirectionalPaymentError
-    | SendCommit of SendCommitError
-    | RecvCommit of RecvCommitError
-    interface IErrorMsg with
-        member self.Message =
-            match self with
-            | InvalidMonoHopPayment (_, err) ->
-                SPrintF1 "Invalid monohop payment: %s" err.Message
-            | SendCommit err ->
-                SPrintF1 "Error sending commitment: %s" (err :> IErrorMsg).Message
-            | RecvCommit err ->
-                SPrintF1 "Error receiving commitment: %s" (err :> IErrorMsg).Message
-        member self.ChannelBreakdown: bool =
-            match self with
-            | InvalidMonoHopPayment _ -> false
-            | SendCommit sendCommitError ->
-                (sendCommitError :> IErrorMsg).ChannelBreakdown
-            | RecvCommit recvCommitError ->
-                (recvCommitError :> IErrorMsg).ChannelBreakdown
-
-    member internal self.PossibleBug =
-        match self with
-        | InvalidMonoHopPayment _ -> false
-        | SendCommit err -> err.PossibleBug
-        | RecvCommit err -> err.PossibleBug
-
 and internal SendHtlcPaymentError =
     | NoMultiHopHtlcSupport
     | InvalidHtlcPayment of ActiveChannel * InvalidUpdateAddHTLCError
@@ -259,49 +232,6 @@ and internal SendHtlcPaymentError =
         | RecvCommit err -> err.PossibleBug
         | RecvFulfillOrFail err -> err.PossibleBug
         | ReceivedHtlcFail _ -> false
-
-and internal RecvMonoHopPaymentError =
-    | RecvMonoHopPayment of RecvMsgError
-    | PeerErrorMessageInsteadOfMonoHopPayment of BrokenChannel * PeerErrorMessage
-    | InvalidMonoHopPayment of BrokenChannel * ChannelError
-    | ExpectedMonoHopPayment of ILightningMsg
-    | RecvCommit of RecvCommitError
-    | SendCommit of SendCommitError
-    interface IErrorMsg with
-        member self.Message =
-            match self with
-            | RecvMonoHopPayment err ->
-                SPrintF1 "Error receiving monohop payment message: %s" (err :> IErrorMsg).Message
-            | PeerErrorMessageInsteadOfMonoHopPayment (_, err) ->
-                SPrintF1 "Peer sent us an error message instead of a monohop payment: %s" (err :> IErrorMsg).Message
-            | InvalidMonoHopPayment (_, err) ->
-                SPrintF1 "Invalid monohop payment message: %s" err.Message
-            | ExpectedMonoHopPayment msg ->
-                SPrintF1 "Expected monohop payment msg, got %A" (msg.GetType())
-            | RecvCommit err ->
-                SPrintF1 "Error receiving commitment: %s" (err :> IErrorMsg).Message
-            | SendCommit err ->
-                SPrintF1 "Error sending commitment: %s" (err :> IErrorMsg).Message
-        member self.ChannelBreakdown: bool =
-            match self with
-            | RecvMonoHopPayment recvMsgError ->
-                (recvMsgError :> IErrorMsg).ChannelBreakdown
-            | PeerErrorMessageInsteadOfMonoHopPayment _ -> true
-            | InvalidMonoHopPayment _ -> true
-            | ExpectedMonoHopPayment _ -> false
-            | RecvCommit recvCommitError ->
-                (recvCommitError :> IErrorMsg).ChannelBreakdown
-            | SendCommit sendCommitError ->
-                (sendCommitError :> IErrorMsg).ChannelBreakdown
-
-    member internal self.PossibleBug =
-        match self with
-        | RecvMonoHopPayment err -> err.PossibleBug
-        | RecvCommit err -> err.PossibleBug
-        | SendCommit err -> err.PossibleBug
-        | PeerErrorMessageInsteadOfMonoHopPayment _
-        | InvalidMonoHopPayment _
-        | ExpectedMonoHopPayment _ -> false
 
 and internal RecvHtlcPaymentError =
     | RecvHtlcPayment of RecvMsgError
@@ -836,41 +766,6 @@ and internal ActiveChannel =
             | _ -> return Error <| ExpectedHtlcFulfillOrFail channelMsg
     }
 
-    member internal self.SendMonoHopUnidirectionalPayment (amount: LNMoney)
-                                                     : Async<Result<ActiveChannel, SendMonoHopPaymentError>> = async {
-        let connectedChannel = self.ConnectedChannel
-        let peerNode = connectedChannel.PeerNode
-        let channel = connectedChannel.Channel
-
-        let monoHopUnidirectionalPaymentMsgAndChannelRes =
-            channel.Channel.MonoHopUnidirectionalPayment amount
-        match monoHopUnidirectionalPaymentMsgAndChannelRes with
-        | Error (InvalidMonoHopUnidirectionalPayment err) ->
-            return Error <| SendMonoHopPaymentError.InvalidMonoHopPayment (self, err)
-        | Error err -> return failwith <| SPrintF1 "error executing mono hop payment command: %s" err.Message
-        | Ok (channelAfterMonoHopPayment, monoHopUnidirectionalPaymentMsg) ->
-            let! peerNodeAfterMonoHopPaymentSent = peerNode.SendMsg monoHopUnidirectionalPaymentMsg
-            let connectedChannelAfterMonoHopPaymentSent =
-                {
-                    connectedChannel with
-                        PeerNode = peerNodeAfterMonoHopPaymentSent
-                        Channel =
-                            {
-                                Channel = channelAfterMonoHopPayment
-                            }
-                }
-            connectedChannelAfterMonoHopPaymentSent.SaveToWallet()
-            let activeChannel = { ConnectedChannel = connectedChannelAfterMonoHopPaymentSent }
-            let! activeChannelAfterCommitSentRes = activeChannel.SendCommit()
-            match activeChannelAfterCommitSentRes with
-            | Error err -> return Error <| SendMonoHopPaymentError.SendCommit err
-            | Ok activeChannelAfterCommitSent ->
-                let! activeChannelAfterCommitReceivedRes = activeChannelAfterCommitSent.RecvCommit()
-                match activeChannelAfterCommitReceivedRes with
-                | Error err -> return Error <| SendMonoHopPaymentError.RecvCommit err
-                | Ok activeChannelAfterCommitReceived -> return Ok activeChannelAfterCommitReceived
-    }
-
     member internal self.SendHtlcPayment (invoice: PaymentInvoice) (waitForResult: bool): Async<Result<ActiveChannel, SendHtlcPaymentError>> = async {
         let connectedChannel = self.ConnectedChannel
         let peerNode = connectedChannel.PeerNode
@@ -970,46 +865,6 @@ and internal ActiveChannel =
                             return Error <| SendHtlcPaymentError.ReceivedHtlcFail activeChannelAfterNewCommit
                     | Ok activeChannelAfterCommitReceived ->
                         return Ok (activeChannelAfterCommitReceived)
-    }
-
-    member internal self.RecvMonoHopUnidirectionalPayment (monoHopUnidirectionalPaymentMsg: MonoHopUnidirectionalPaymentMsg)
-                                                              : Async<Result<ActiveChannel, RecvMonoHopPaymentError>> = async {
-        let connectedChannel = self.ConnectedChannel
-        let channelWrapper = connectedChannel.Channel
-
-        let channelAfterMonoHopPaymentReceivedRes =
-            channelWrapper.Channel.ApplyMonoHopUnidirectionalPayment
-                monoHopUnidirectionalPaymentMsg
-
-        match channelAfterMonoHopPaymentReceivedRes with
-        | Error err ->
-            let connectedChannelAfterErrorReceived =
-                { connectedChannel with
-                    Channel = channelWrapper
-                }
-            let! connectedChannelAfterError = connectedChannelAfterErrorReceived.SendError err.Message
-            let brokenChannel = { BrokenChannel.ConnectedChannel = connectedChannelAfterError }
-            return Error <| InvalidMonoHopPayment (brokenChannel, err)
-        | Ok channelAfterMonoHopPaymentReceived ->
-            let connectedChannelAfterMonoHopPaymentReceived =
-                {
-                    connectedChannel with
-                        Channel =
-                            {
-                                Channel = channelAfterMonoHopPaymentReceived
-                            }
-                }
-
-            connectedChannelAfterMonoHopPaymentReceived.SaveToWallet()
-            let activeChannel = { ConnectedChannel = connectedChannelAfterMonoHopPaymentReceived }
-            let! activeChannelAfterCommitReceivedRes = activeChannel.RecvCommit()
-            match activeChannelAfterCommitReceivedRes with
-            | Error err -> return Error <| RecvMonoHopPaymentError.RecvCommit err
-            | Ok activeChannelAfterCommitReceived ->
-            let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
-            match activeChannelAfterCommitSentRes with
-            | Error err -> return Error <| RecvMonoHopPaymentError.SendCommit err
-            | Ok activeChannelAfterCommitSent -> return Ok activeChannelAfterCommitSent
     }
 
     member internal self.FailHtlc (id: HTLCId) (reason: HtlcSettleFailReason) : Async<Result<ActiveChannel * HTLCSettleStatus, RecvHtlcPaymentError>> =

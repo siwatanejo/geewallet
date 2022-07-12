@@ -456,36 +456,6 @@ module LayerTwo =
             UserInteraction.PressAnyKeyToContinue()
         }
 
-    let SendPayment(): Async<unit> =
-        async {
-            let account = AskLightningAccount None
-            let channelStore = ChannelStore account
-            let channelIdOpt = MaybeAskChannelId channelStore (Some true)
-            match channelIdOpt with
-            | None -> return ()
-            | Some channelId ->
-                let channelInfo = channelStore.ChannelInfo channelId
-                let transferAmountOpt = UserInteraction.AskLightningAmount channelInfo
-                let connectionString = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType channelInfo.Currency
-                match transferAmountOpt with
-                | None -> ()
-                | Some transferAmount ->
-                    let trySendPayment password =
-                        async {
-                            let nodeClient = Lightning.Connection.StartClient channelStore password
-                            let! paymentRes = Lightning.Network.SendMonoHopPayment nodeClient channelId transferAmount connectionString
-                            match paymentRes with
-                            | Error nodeSendMonoHopPaymentError ->
-                                let currency = (account :> IAccount).Currency
-                                Console.WriteLine(sprintf "Error sending monohop payment: %s" nodeSendMonoHopPaymentError.Message)
-                                do! MaybeForceCloseChannel (Node.Client nodeClient) currency channelId nodeSendMonoHopPaymentError
-                            | Ok () ->
-                                Console.WriteLine "Payment sent."
-                        }
-                    do! UserInteraction.TryWithPasswordAsync trySendPayment
-                    UserInteraction.PressAnyKeyToContinue()
-        }
-
     let SendHtlcPayment(): Async<unit> =
         async {
             let account = AskLightningAccount None

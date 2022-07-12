@@ -56,24 +56,6 @@ type internal NodeAcceptChannelError =
         member __.ChannelBreakdown: bool =
             false
 
-type internal NodeSendMonoHopPaymentError =
-    | Reconnect of ReconnectActiveChannelError
-    | SendPayment of SendMonoHopPaymentError
-    interface IErrorMsg with
-        member self.Message =
-            match self with
-            | Reconnect reconnectActiveChannelError ->
-                SPrintF1 "error reconnecting channel: %s" (reconnectActiveChannelError :> IErrorMsg).Message
-            | SendPayment sendMonoHopPaymentError ->
-                SPrintF1 "error sending payment on reconnected channel: %s"
-                         (sendMonoHopPaymentError :> IErrorMsg).Message
-        member self.ChannelBreakdown: bool =
-            match self with
-            | Reconnect reconnectActiveChannelError ->
-                (reconnectActiveChannelError :> IErrorMsg).ChannelBreakdown
-            | SendPayment sendMonoHopPaymentError ->
-                (sendMonoHopPaymentError :> IErrorMsg).ChannelBreakdown
-
 type internal NodeSendHtlcPaymentError =
     | Reconnect of ReconnectActiveChannelError
     | SendPayment of SendHtlcPaymentError
@@ -91,25 +73,6 @@ type internal NodeSendHtlcPaymentError =
                 (reconnectActiveChannelError :> IErrorMsg).ChannelBreakdown
             | SendPayment sendHtlcPaymentError ->
                 (sendHtlcPaymentError :> IErrorMsg).ChannelBreakdown
-
-type internal NodeReceiveMonoHopPaymentError =
-    | Reconnect of ReconnectActiveChannelError
-    | ReceivePayment of RecvMonoHopPaymentError
-    interface IErrorMsg with
-        member self.Message =
-            match self with
-            | Reconnect reconnectActiveChannelError ->
-                SPrintF1 "error reconnecting channel: %s" (reconnectActiveChannelError :> IErrorMsg).Message
-            | ReceivePayment recvMonoHopPaymentError ->
-                SPrintF1 "error receiving payment on reconnected channel: %s"
-                         (recvMonoHopPaymentError :> IErrorMsg).Message
-        member self.ChannelBreakdown: bool =
-            match self with
-            | Reconnect reconnectActiveChannelError ->
-                (reconnectActiveChannelError :> IErrorMsg).ChannelBreakdown
-            | ReceivePayment recvMonoHopPaymentError ->
-                (recvMonoHopPaymentError :> IErrorMsg).ChannelBreakdown
-
 
 type internal NodeReceiveHtlcPaymentError =
     | Reconnect of ReconnectActiveChannelError
@@ -365,45 +328,6 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
 
     }
 
-    member internal self.SendMonoHopPayment (channelId: ChannelIdentifier)
-                                            (transferAmount: TransferAmount)
-                                            (nonionEndPoint: Option<NOnionEndPoint>)
-                                                : Async<Result<unit, IErrorMsg>> = async {
-        let amount =
-            let btcAmount = transferAmount.ValueToSend
-            let lnAmount = int64(btcAmount * decimal DotNetLightning.Utils.LNMoneyUnit.BTC)
-            DotNetLightning.Utils.LNMoney lnAmount
-        let! activeChannelRes =
-            ActiveChannel.ConnectReestablish self.ChannelStore nodeMasterPrivKey channelId nonionEndPoint
-        match activeChannelRes with
-        | Error reconnectActiveChannelError ->
-            if reconnectActiveChannelError.PossibleBug then
-                let msg =
-                    SPrintF2
-                        "error connecting to peer to send monohop payment on channel %s: %s"
-                        (channelId.ToString())
-                        (reconnectActiveChannelError :> IErrorMsg).Message
-                Infrastructure.ReportWarningMessage msg
-                |> ignore<bool>
-            return Error <| (NodeSendMonoHopPaymentError.Reconnect reconnectActiveChannelError :> IErrorMsg)
-        | Ok activeChannel ->
-            let! paymentRes = activeChannel.SendMonoHopUnidirectionalPayment amount
-            match paymentRes with
-            | Error sendMonoHopPaymentError ->
-                if sendMonoHopPaymentError.PossibleBug then
-                    let msg =
-                        SPrintF2
-                            "error sending monohop payment on channel %s: %s"
-                            (channelId.ToString())
-                            (sendMonoHopPaymentError :> IErrorMsg).Message
-                    Infrastructure.ReportWarningMessage msg
-                    |> ignore<bool>
-                return Error <| (NodeSendMonoHopPaymentError.SendPayment sendMonoHopPaymentError :> IErrorMsg)
-            | Ok activeChannelAfterPayment ->
-                (activeChannelAfterPayment :> IDisposable).Dispose()
-                return Ok ()
-    }
-
     member internal self.InitiateCloseChannel (channelId: ChannelIdentifier) (nonionIntroductionPoint: Option<NOnionEndPoint>): Async<Result<unit, NodeInitiateCloseChannelError>> =
         async {
             let! connectRes =
@@ -498,70 +422,6 @@ type NodeServer internal (channelStore: ChannelStore, transportListener: Transpo
                     (fundedChannel :> IDisposable).Dispose()
                     return Ok (channelId, txId)
     }
-
-    // use ReceiveLightningEvent instead
-    member internal self.ReceiveMonoHopPayment (channelId: ChannelIdentifier)
-                                                   : Async<Result<unit, IErrorMsg>> = async {
-        let! activeChannelRes = ActiveChannel.AcceptReestablish self.ChannelStore self.TransportListener channelId
-        match activeChannelRes with
-        | Error reconnectActiveChannelError ->
-            if reconnectActiveChannelError.PossibleBug then
-                let msg =
-                    SPrintF2
-                        "error accepting connection from peer to receive monohop payment on channel %s: %s"
-                        (channelId.ToString())
-                        (reconnectActiveChannelError :> IErrorMsg).Message
-                Infrastructure.ReportWarningMessage msg
-                |> ignore<bool>
-            return Error <| (NodeReceiveMonoHopPaymentError.Reconnect reconnectActiveChannelError :> IErrorMsg)
-        | Ok activeChannel ->
-            let connectedChannel = activeChannel.ConnectedChannel
-            Infrastructure.LogDebug "Waiting for lightning message"
-            let rec recv (peerNode: PeerNode) =
-                async {
-                    let! recvChannelMsgRes = peerNode.RecvChannelMsg()
-                    match recvChannelMsgRes with
-                    | Error err ->
-                        return failwith <| SPrintF1 "Received error while waiting for lightning message: %s" (err :> IErrorMsg).Message
-                    | Ok (peerNodeAfterMsgReceived, channelMsg) ->
-                        match channelMsg with
-                        | :? DotNetLightning.Serialization.Msgs.MonoHopUnidirectionalPaymentMsg as monoHopUnidirectionalPaymentMsg ->
-                            let activeChannelAfterMsgReceived =
-                                { activeChannel with
-                                    ConnectedChannel =
-                                        { activeChannel.ConnectedChannel
-                                            with PeerNode = peerNodeAfterMsgReceived }}
-
-                            return! self.HandleMonoHopUnidirectionalPaymentMsg activeChannelAfterMsgReceived channelId monoHopUnidirectionalPaymentMsg
-                        | :? FundingLockedMsg ->
-                            return! recv(peerNodeAfterMsgReceived)
-                        | msg ->
-                            return failwith <| SPrintF1 "Unexpected msg while waiting for monohop payment message: %As" msg
-                }
-            return! recv(connectedChannel.PeerNode)
-    }
-
-    member private self.HandleMonoHopUnidirectionalPaymentMsg (activeChannel: ActiveChannel)
-        (channelId: ChannelIdentifier)
-        (monoHopUnidirectionalPaymentMsg: DotNetLightning.Serialization.Msgs.MonoHopUnidirectionalPaymentMsg)
-        : Async<Result<unit, IErrorMsg>> =
-            async {
-                let! paymentRes = activeChannel.RecvMonoHopUnidirectionalPayment monoHopUnidirectionalPaymentMsg
-                match paymentRes with
-                | Error recvMonoHopPaymentError ->
-                    if recvMonoHopPaymentError.PossibleBug then
-                        let msg =
-                            SPrintF2
-                                "error accepting monohop payment on channel %s: %s"
-                                (channelId.ToString())
-                                (recvMonoHopPaymentError :> IErrorMsg).Message
-                        Infrastructure.ReportWarningMessage msg
-                        |> ignore<bool>
-                    return Error <| (NodeReceiveMonoHopPaymentError.ReceivePayment recvMonoHopPaymentError :> IErrorMsg)
-                | Ok activeChannelAfterPaymentReceived ->
-                    (activeChannelAfterPaymentReceived :> IDisposable).Dispose()
-                    return Ok ()
-            }
 
     member private self.HandleUpdateAddHtlcMsg (activeChannel: ActiveChannel)
         (channelId: ChannelIdentifier)
@@ -686,11 +546,6 @@ type NodeServer internal (channelStore: ChannelStore, transportListener: Transpo
                         ConnectedChannel = connectedChannelAfterMsgReceived
                 }
                 match channelMsg with
-                | :? MonoHopUnidirectionalPaymentMsg as monoHopUnidirectionalPaymentMsg ->
-                    let! res = self.HandleMonoHopUnidirectionalPaymentMsg activeChannelAfterMsgReceived channelId monoHopUnidirectionalPaymentMsg
-                    match res with
-                    | Error err -> return Error err
-                    | Ok () -> return Ok IncomingChannelEvent.MonoHopUnidirectionalPayment
                 | :? UpdateAddHTLCMsg as updateAddHTLCMsg ->
                     let! res = self.HandleUpdateAddHtlcMsg activeChannelAfterMsgReceived channelId updateAddHTLCMsg settleHTLCImmediately
                     match res with
