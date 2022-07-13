@@ -91,7 +91,6 @@ type internal InvoiceDataStore(account: NormalUtxoAccount) =
         try
             let fileName = self.InvoiceDataFilePath
             let json = File.ReadAllText fileName
-            Console.WriteLine (json)
             Marshalling.DeserializeCustom<AccountInvoiceData> (
                 json,
                 AccountInvoiceData.LightningSerializerSettings

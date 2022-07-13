@@ -782,7 +782,6 @@ type Node =
 
             let claimHtlcOutput (transaction) =
                 async {
-                    Console.WriteLine ("Claiming htlc output from the commitment tx")
                     let txb, shouldAddFee =
                         ClosingHelpers.ClaimHtlcOutput
                             transaction
@@ -849,7 +848,6 @@ type Node =
                                 | None ->
                                     return failwith "NIE"
                                 | Some spendingTx ->
-                                    Console.WriteLine ("Claiming htlc output from the 2nd stage tx")
                                     let txbOpt = 
                                         ClosingHelpers.ClaimDelayedHtlcTx htlcTransactions.ClosingTx spendingTx serializedChannel.SavedChannelState serializedChannel.RemoteNextCommitInfo channelPrivKeys
                                     match txbOpt with
