@@ -464,7 +464,7 @@ module LayerTwo =
             match channelIdOpt with
             | None -> return ()
             | Some channelId ->
-                let invoiceOpt = UserInteraction.Ask (PaymentInvoice.Parse) "Enter BOLT11 invoice:"
+                let invoiceOpt = UserInteraction.Ask (PaymentInvoice.Parse) "Enter BOLT11 invoice"
                 //FIXME: No NOnion support for Htlc atm
                 //let connectionString = UserInteraction.MaybeAskChannelConnectionString channelInfo.NodeTransportType channelInfo.Currency
                 match invoiceOpt with
