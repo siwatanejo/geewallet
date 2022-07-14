@@ -1035,7 +1035,8 @@ module LayerTwo =
                                     do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx channelStore |> Async.Ignore
                                     return! tryCreateHtlcTx htlcTxsList password
                         }
-                    do! tryCreateHtlcTx htlcTxsList |> UserInteraction.TryWithPasswordAsync
+                    if htlcTxsList.IsEmpty() |> not then
+                        do! tryCreateHtlcTx htlcTxsList |> UserInteraction.TryWithPasswordAsync
         }
 
     //TODO: add good user-friendly msgs here
@@ -1066,7 +1067,8 @@ module LayerTwo =
                                     }
                                 return! broadcastRecoveryTxs htlcRecoveryTxs
                         }
-                    do! tryCreateRecoveryTx delayedHtlcsTxsList |> UserInteraction.TryWithPasswordAsync
+                    if delayedHtlcsTxsList |> List.isEmpty |> not then
+                        do! tryCreateRecoveryTx delayedHtlcsTxsList |> UserInteraction.TryWithPasswordAsync
         }
     
     let GetChannelStatuses (accounts: seq<IAccount>): seq<Async<unit -> Async<seq<string>>>> =
