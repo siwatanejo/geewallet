@@ -23,11 +23,10 @@ type internal Operations =
     | Options                  = 9
     | OpenChannel              = 10
     | AcceptChannel            = 11
-    | SendLightningPayment     = 12
-    | SendHtlcLightningPayment = 13
-    | CreateInvoice            = 14
-    | ReceiveLightningEvent    = 15
-    | CloseChannel             = 16
+    | SendHtlcLightningPayment = 12
+    | CreateInvoice            = 13
+    | ReceiveLightningEvent    = 14
+    | CloseChannel             = 15
 
 type WhichAccount =
     All of seq<IAccount> | MatchingWith of IAccount
@@ -94,7 +93,6 @@ module UserInteraction =
         | Operations.AcceptChannel
         | Operations.CreateInvoice
             -> not noAccountsAtAll
-        | Operations.SendLightningPayment
         | Operations.SendHtlcLightningPayment ->
             activeAccounts.OfType<NormalUtxoAccount>().SelectMany(fun account ->
                 let channelStore = ChannelStore account
