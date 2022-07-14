@@ -787,22 +787,23 @@ and internal ActiveChannel =
         if paymentRequest.NodeIdValue.Value <> channel.RemoteNodeId.Value then
             return Error <| SendHtlcPaymentError.NoMultiHopHtlcSupport
         else
-            let! blockHeight = async {
+            let! currentBlockHeight = async {
                 let! blockHeightResponse =
                     Server.Query currency
                         (QuerySettings.Default ServerSelectionMode.Fast)
                         (ElectrumClient.SubscribeHeaders ())
                         None
                 return
-                    (uint32 blockHeightResponse.Height) + paymentRequest.MinFinalCLTVExpiryDelta.Value
+                    uint32 blockHeightResponse.Height
             }
+            let expiryBlockHeight = currentBlockHeight + paymentRequest.MinFinalCLTVExpiryDelta.Value
 
             let tlvs =
                 match paymentRequest.PaymentSecret with
                 | Some paymentSecret ->
                     [|
                         HopPayloadTLV.AmountToForward amount
-                        HopPayloadTLV.OutgoingCLTV blockHeight
+                        HopPayloadTLV.OutgoingCLTV expiryBlockHeight
                         HopPayloadTLV.PaymentData
                             (
                                 PaymentSecret.Create paymentSecret,
@@ -812,7 +813,7 @@ and internal ActiveChannel =
                 | None ->
                     [|
                         HopPayloadTLV.AmountToForward amount
-                        HopPayloadTLV.OutgoingCLTV blockHeight
+                        HopPayloadTLV.OutgoingCLTV expiryBlockHeight
                     |]
 
             let realm0Data = TLVPayload(tlvs).ToBytes()
@@ -823,11 +824,11 @@ and internal ActiveChannel =
                     {
                         OperationAddHTLC.Amount = amount
                         PaymentHash = paymentRequest.PaymentHash
-                        Expiry = BlockHeight blockHeight
+                        Expiry = BlockHeight expiryBlockHeight
                         Onion = onionPacket.Packet
                         Upstream = None
                         Origin = Origin.Local
-                        CurrentHeight = BlockHeight.Zero
+                        CurrentHeight = BlockHeight currentBlockHeight
                     }
 
             match channelAndAddHtlcMsgRes with
