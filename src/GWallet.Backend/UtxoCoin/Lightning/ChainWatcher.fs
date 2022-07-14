@@ -1,5 +1,6 @@
 ﻿namespace GWallet.Backend.UtxoCoin.Lightning
 
+open System
 open System.Linq
 
 open NBitcoin
@@ -264,7 +265,11 @@ module public ChainWatcher =
         return
             {
                 HtlcTxsList.ChannelId = channelId
-                ClosingTx = Transaction.Parse(htlcsData.ClosingTx, network)
+                ClosingTxOpt =
+                    if htlcsData.ClosingTx = String.Empty then
+                        None
+                    else
+                        Some (Transaction.Parse(htlcsData.ClosingTx, network))
                 Currency = (channelStore.Account :> IAccount).Currency
                 Transactions = readyHtlcs
                 Done = htlcsData.ChannelHtlcsData.IsEmpty

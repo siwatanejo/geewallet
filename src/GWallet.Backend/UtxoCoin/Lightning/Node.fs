@@ -766,119 +766,123 @@ type Node =
         (password: string)
         : Async<HtlcTx * HtlcTxsList> =
         async {
-            let nodeMasterPrivKey =
-                match self with
-                | Client nodeClient -> nodeClient.NodeMasterPrivKey
-                | Server nodeServer -> nodeServer.NodeMasterPrivKey
-            let serializedChannel = self.ChannelStore.LoadChannel htlcTransactions.ChannelId
-            let currency = self.Account.Currency
-            let network = UtxoCoin.Account.GetNetwork currency
-            let channelPrivKeys =
-                let channelIndex = serializedChannel.ChannelIndex
-                nodeMasterPrivKey.ChannelPrivKeys channelIndex
-            let targetAddress =
-                let originAddress = self.Account.PublicAddress
-                BitcoinAddress.Create(originAddress, network)
+            match htlcTransactions.ClosingTxOpt with
+            | None ->
+                return failwith "This function shouldn't be called if htlcTransaction.IsEmpty is true"
+            | Some closingTx ->
+                let nodeMasterPrivKey =
+                    match self with
+                    | Client nodeClient -> nodeClient.NodeMasterPrivKey
+                    | Server nodeServer -> nodeServer.NodeMasterPrivKey
+                let serializedChannel = self.ChannelStore.LoadChannel htlcTransactions.ChannelId
+                let currency = self.Account.Currency
+                let network = UtxoCoin.Account.GetNetwork currency
+                let channelPrivKeys =
+                    let channelIndex = serializedChannel.ChannelIndex
+                    nodeMasterPrivKey.ChannelPrivKeys channelIndex
+                let targetAddress =
+                    let originAddress = self.Account.PublicAddress
+                    BitcoinAddress.Create(originAddress, network)
 
-            let claimHtlcOutput (transaction) =
-                async {
-                    let txb, shouldAddFee =
-                        ClosingHelpers.ClaimHtlcOutput
-                            transaction
-                            serializedChannel.SavedChannelState
-                            serializedChannel.RemoteNextCommitInfo
-                            htlcTransactions.ClosingTx
-                            channelPrivKeys
-                    txb.SendAllRemaining targetAddress |> ignore
+                let claimHtlcOutput (transaction) =
+                    async {
+                        let txb, shouldAddFee =
+                            ClosingHelpers.ClaimHtlcOutput
+                                transaction
+                                serializedChannel.SavedChannelState
+                                serializedChannel.RemoteNextCommitInfo
+                                closingTx
+                                channelPrivKeys
+                        txb.SendAllRemaining targetAddress |> ignore
 
-                    if not shouldAddFee then
-                        let! feeRate = async {
-                            let! feeEstimator = FeeEstimator.Create currency
-                            return feeEstimator.FeeRatePerKw
-                        }
-                        let fees = txb.EstimateFees (feeRate.AsNBitcoinFeeRate())
-                        txb.SendFees fees |> ignore<TransactionBuilder>
-                        return (txb.BuildTransaction true, fees, shouldAddFee)
-                    else
-                        //TODO: We need to somehow make sure we are not paying more fees than the htlc itself
-                        let! tx, fees = FeeManagement.addFeeInputsWithCpfpSupport (self.ChannelStore.Account, password) txb None
-                        return tx, fees, shouldAddFee
-                }
+                        if not shouldAddFee then
+                            let! feeRate = async {
+                                let! feeEstimator = FeeEstimator.Create currency
+                                return feeEstimator.FeeRatePerKw
+                            }
+                            let fees = txb.EstimateFees (feeRate.AsNBitcoinFeeRate())
+                            txb.SendFees fees |> ignore<TransactionBuilder>
+                            return (txb.BuildTransaction true, fees, shouldAddFee)
+                        else
+                            //TODO: We need to somehow make sure we are not paying more fees than the htlc itself
+                            let! tx, fees = FeeManagement.addFeeInputsWithCpfpSupport (self.ChannelStore.Account, password) txb None
+                            return tx, fees, shouldAddFee
+                    }
 
-            match htlcTransactions.Transactions with
-            | [] -> return failwith "This function shouldn't be called if htlcTransaction.IsDone is true"
-            | transaction:: rest ->
-                let! finalTx, fees, shouldAddFees =
-                    match transaction with
-                    | Timeout _
-                    | HtlcTransaction.Success _ ->
-                        claimHtlcOutput transaction
-                    | Penalty (redeemScript, _) ->
-                        async {
-                            let GetElectrumScriptHashFromScriptPubKey (scriptPubKey: Script) =
-                                let sha = NBitcoin.Crypto.Hashes.SHA256(scriptPubKey.ToBytes())
-                                let reversedSha = sha.Reverse().ToArray()
-                                NBitcoin.DataEncoders.Encoders.Hex.EncodeData reversedSha
+                match htlcTransactions.Transactions with
+                | [] -> return failwith "This function shouldn't be called if htlcTransaction.IsDone is true"
+                | transaction:: rest ->
+                    let! finalTx, fees, shouldAddFees =
+                        match transaction with
+                        | Timeout _
+                        | HtlcTransaction.Success _ ->
+                            claimHtlcOutput transaction
+                        | Penalty (redeemScript, _) ->
+                            async {
+                                let GetElectrumScriptHashFromScriptPubKey (scriptPubKey: Script) =
+                                    let sha = NBitcoin.Crypto.Hashes.SHA256(scriptPubKey.ToBytes())
+                                    let reversedSha = sha.Reverse().ToArray()
+                                    NBitcoin.DataEncoders.Encoders.Hex.EncodeData reversedSha
 
-                            let spk = redeemScript.WitHash.ScriptPubKey
-                            let N =
-                                (htlcTransactions.ClosingTx.Outputs.AsIndexedOutputs()
-                                |> Seq.find (fun output -> output.TxOut.ScriptPubKey = spk)).N
+                                let spk = redeemScript.WitHash.ScriptPubKey
+                                let N =
+                                    (closingTx.Outputs.AsIndexedOutputs()
+                                    |> Seq.find (fun output -> output.TxOut.ScriptPubKey = spk)).N
                             
-                            let job =  GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetUnspentTransactionOutputs
-                            let! utxos = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
-                            if not (utxos |> Seq.exists (fun utxo -> utxo.TxHash = htlcTransactions.ClosingTx.GetHash().ToString() && utxo.TxPos = int N)) then
-                                let job =  GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetBlockchainScriptHashHistory
-                                let! hashHistory = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
-                                let findSpending2ndStage (spendingTx: BlockchainScriptHashHistoryInnerResult) =
-                                    async {
-                                        let job = ElectrumClient.GetBlockchainTransaction spendingTx.TxHash
-                                        let! spendingTxStr = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
-                                        let spendingTx = Transaction.Parse (spendingTxStr, network)
-                                        let spendingTxInput =
-                                            spendingTx.Inputs
-                                            |> Seq.tryFind (fun inp -> inp.PrevOut.Hash = htlcTransactions.ClosingTx.GetHash() && inp.PrevOut.N = N)
-                                        if spendingTxInput.IsSome then
-                                            return Some spendingTx
-                                        else
-                                            return None
-                                    }
-                                let! spendingTxOpt = ListAsyncTryPick hashHistory findSpending2ndStage
-                                match spendingTxOpt with 
-                                | None ->
-                                    return failwith "NIE"
-                                | Some spendingTx ->
-                                    let txbOpt = 
-                                        ClosingHelpers.ClaimDelayedHtlcTx htlcTransactions.ClosingTx spendingTx serializedChannel.SavedChannelState serializedChannel.RemoteNextCommitInfo channelPrivKeys
-                                    match txbOpt with
-                                    | Some txb ->
-                                        txb.SendAllRemaining targetAddress |> ignore
-                                        let! feeRate = async {
-                                            let! feeEstimator = FeeEstimator.Create currency
-                                            return feeEstimator.FeeRatePerKw
+                                let job =  GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetUnspentTransactionOutputs
+                                let! utxos = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
+                                if not (utxos |> Seq.exists (fun utxo -> utxo.TxHash = closingTx.GetHash().ToString() && utxo.TxPos = int N)) then
+                                    let job =  GetElectrumScriptHashFromScriptPubKey spk |> ElectrumClient.GetBlockchainScriptHashHistory
+                                    let! hashHistory = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
+                                    let findSpending2ndStage (spendingTx: BlockchainScriptHashHistoryInnerResult) =
+                                        async {
+                                            let job = ElectrumClient.GetBlockchainTransaction spendingTx.TxHash
+                                            let! spendingTxStr = Server.Query currency (QuerySettings.Default ServerSelectionMode.Fast) job None
+                                            let spendingTx = Transaction.Parse (spendingTxStr, network)
+                                            let spendingTxInput =
+                                                spendingTx.Inputs
+                                                |> Seq.tryFind (fun inp -> inp.PrevOut.Hash = closingTx.GetHash() && inp.PrevOut.N = N)
+                                            if spendingTxInput.IsSome then
+                                                return Some spendingTx
+                                            else
+                                                return None
                                         }
-                                        let fees = txb.EstimateFees (feeRate.AsNBitcoinFeeRate())
-                                        txb.SendFees fees |> ignore<TransactionBuilder>
-                                        return (txb.BuildTransaction true, fees, false)
+                                    let! spendingTxOpt = ListAsyncTryPick hashHistory findSpending2ndStage
+                                    match spendingTxOpt with 
                                     | None ->
                                         return failwith "NIE"
-                            else
-                                return! claimHtlcOutput transaction
-                        }
-                    
-                let htlcTransaction: HtlcTx =
-                    {
-                        ChannelId = htlcTransactions.ChannelId
-                        Currency = currency
-                        Fee = MinerFee (fees.Satoshi, DateTime.UtcNow, currency)
-                        AmountInSatoshis = transaction.Amount.Satoshi |> Convert.ToUInt64
-                        NeedsRecoveryTx = shouldAddFees
-                        Tx =
-                            {
-                                NBitcoinTx = finalTx
+                                    | Some spendingTx ->
+                                        let txbOpt = 
+                                            ClosingHelpers.ClaimDelayedHtlcTx closingTx spendingTx serializedChannel.SavedChannelState serializedChannel.RemoteNextCommitInfo channelPrivKeys
+                                        match txbOpt with
+                                        | Some txb ->
+                                            txb.SendAllRemaining targetAddress |> ignore
+                                            let! feeRate = async {
+                                                let! feeEstimator = FeeEstimator.Create currency
+                                                return feeEstimator.FeeRatePerKw
+                                            }
+                                            let fees = txb.EstimateFees (feeRate.AsNBitcoinFeeRate())
+                                            txb.SendFees fees |> ignore<TransactionBuilder>
+                                            return (txb.BuildTransaction true, fees, false)
+                                        | None ->
+                                            return failwith "NIE"
+                                else
+                                    return! claimHtlcOutput transaction
                             }
-                    }
-                return htlcTransaction, { htlcTransactions with Transactions = rest }
+                    
+                    let htlcTransaction: HtlcTx =
+                        {
+                            ChannelId = htlcTransactions.ChannelId
+                            Currency = currency
+                            Fee = MinerFee (fees.Satoshi, DateTime.UtcNow, currency)
+                            AmountInSatoshis = transaction.Amount.Satoshi |> Convert.ToUInt64
+                            NeedsRecoveryTx = shouldAddFees
+                            Tx =
+                                {
+                                    NBitcoinTx = finalTx
+                                }
+                        }
+                    return htlcTransaction, { htlcTransactions with Transactions = rest }
         }
 
     member self.CreateRecoveryTxForDelayedHtlcTx
