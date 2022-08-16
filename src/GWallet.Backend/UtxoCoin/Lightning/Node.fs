@@ -11,7 +11,9 @@ open DotNetLightning.Channel
 open DotNetLightning.Channel.ClosingHelpers
 open DotNetLightning.Crypto
 open DotNetLightning.Utils
+open DotNetLightning.Serialization
 open DotNetLightning.Serialization.Msgs
+open DotNetLightning.Routing.Graph
 open DotNetLightning.Payment
 open ResultUtils.Portability
 open NOnion.Directory
@@ -169,6 +171,8 @@ type internal NodeAcceptUpdateFeeError =
         member self.ChannelBreakdown: bool =
             (self :> IErrorMsg).ChannelBreakdown
 
+exception RoutingQueryException of string
+
 type IChannelToBeOpened =
     abstract member ConfirmationsRequired: uint32 with get
 
@@ -253,6 +257,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 nodeIdentifier
                 ((self.Account :> IAccount).Currency)
                 (Money(channelCapacity.ValueToSend, MoneyUnit.BTC))
+                ConnectionPurpose.ChannelOpening
         match connectRes with
         | Error connectError ->
             if connectError.PossibleBug then
@@ -370,6 +375,105 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 return Ok ()
         }
 
+    member internal self.QueryRoutingGossip (nodeIdentifier: NodeIdentifier) : Async<seq<IRoutingMsg>> =
+        async {
+            let firstBlocknum = 0u
+            let numberOfBlocks = 0xffffffffu
+            let currency = self.ChannelStore.Currency
+            let chainHash = 
+                match currency with
+                | BTC -> Network.Main.GenesisHash
+                | _ -> failwith <| SPrintF1 "Unsupported currency: %A" currency
+            let queryMsg = 
+                { 
+                    QueryChannelRangeMsg.ChainHash=chainHash
+                    FirstBlockNum=BlockHeight(firstBlocknum)
+                    NumberOfBlocks=numberOfBlocks
+                    TLVs=[||]
+                }
+
+            try
+                let! initialNode = 
+                    let purpose = ConnectionPurpose.Routing
+                    PeerNode.Connect nodeMasterPrivKey nodeIdentifier currency Money.Zero purpose
+                let! initialNode = 
+                    match initialNode with
+                    | Ok(node) -> node.SendMsg queryMsg
+                    | Error(e) -> raise (RoutingQueryException <| e.ToString())
+                
+                let results = ResizeArray<IRoutingMsg>()
+
+                let rec processMessages(node: PeerNode) : Async<PeerNode> =
+                    async {
+                        let! response =
+                            let timeout = 1000 // in ms
+                            node.MsgStream.RecvMsg() |> Async.withTimeout timeout
+                        match response with
+                        | Some(Error(e)) -> 
+                            return raise (RoutingQueryException <| e.ToString())
+                        | Some(Ok(newState, (:? IRoutingMsg as msg))) -> 
+                            let node = { node with MsgStream = newState }
+                            match msg with
+                            | :? ReplyShortChannelIdsEndMsg -> 
+                                return node // end processing
+                            | :? ReplyChannelRangeMsg as replyChannelRange -> 
+                                let queryShortIdsMsg =
+                                    {
+                                        QueryShortChannelIdsMsg.ChainHash=chainHash
+                                        ShortIdsEncodingType=EncodingType.SortedPlain
+                                        ShortIds=replyChannelRange.ShortIds
+                                        TLVs=[||]
+                                    }
+                                let! newNodeState = node.SendMsg queryShortIdsMsg
+                                return! processMessages newNodeState
+                            | _ ->
+                                results.Add msg
+                                return! processMessages node
+                        | Some(Ok(newState, _msg)) -> 
+                            // ignore all other messages
+                            return! processMessages { node with MsgStream = newState }
+                        | None -> return node // timeout
+                    }
+
+                do! processMessages initialNode |> Async.Ignore
+                
+                return (results :> seq<_>)
+            with
+            | :? RoutingQueryException as _exn ->
+                return Seq.empty
+        }
+
+    member internal self.CreateRoutingGraph (nodeIdentifier: NodeIdentifier) : Async<DirectedLNGraph> =
+        async {
+            let! gossipMessages = self.QueryRoutingGossip nodeIdentifier
+            let channels = Collections.Generic.HashSet<ChannelDesc>()
+            let updates = Collections.Generic.Dictionary<ShortChannelId, ResizeArray<UnsignedChannelUpdateMsg>>()
+
+            for message in gossipMessages do
+                match message with
+                | :? ChannelAnnouncementMsg as channelAnnouncement ->
+                    let ann = channelAnnouncement.Contents
+                    channels.Add { ShortChannelId = ann.ShortChannelId; A = ann.NodeId1; B = ann.NodeId2 }
+                    |> ignore
+                | :? ChannelUpdateMsg as channelUpdate ->
+                    let upd = channelUpdate.Contents
+                    match updates.TryGetValue upd.ShortChannelId with
+                    | true, storedUpdates -> storedUpdates.Add upd 
+                    | _ -> updates.[upd.ShortChannelId] <- ResizeArray([| upd |])
+                | :? NodeAnnouncementMsg ->
+                    ()
+                | _ -> 
+                    () // ignore gossip queries from peer?
+
+            channels.RemoveWhere(fun channel -> not (updates.ContainsKey channel.ShortChannelId)) |> ignore
+
+            let mutable graph = DirectedLNGraph.Create()
+            for channel in channels do 
+                for update in updates.[channel.ShortChannelId] do
+                    graph <- graph.AddEdge(channel, update)
+            
+            return graph
+        }
 
 type NodeServer internal (channelStore: ChannelStore, transportListener: TransportListener) =
     member val ChannelStore = channelStore

@@ -476,6 +476,9 @@ let rec ProgramMainLoop() =
     //Rerun unresolved check
     unresolvedHtlcsCheckJob |> Async.RunSynchronously |> ignore<array<bool>>
 
+    let routingInfoJob = LayerTwo.GetRoutingInfo activeAccounts
+    Async.RunSynchronously routingInfoJob
+
     Console.WriteLine ()
     Console.WriteLine "*** STATUS ***"
     Console.WriteLine(String.concat Environment.NewLine accountStatusesLines)

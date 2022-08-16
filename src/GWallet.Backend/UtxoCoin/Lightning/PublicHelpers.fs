@@ -49,3 +49,16 @@ module public Network =
     let public EndPoint (nodeServer: NodeServer) = nodeServer.EndPoint
 
     let public AcceptUpdateFee (lightningNode: NodeServer) = lightningNode.AcceptUpdateFee
+
+    let public QueryRoutingGossip (client: NodeClient) = 
+        let node_id = 
+            match client.ChannelStore.Currency with
+            | Currency.BTC ->
+                let addr = "033d8656219478701227199cbd6f670335c8d408a92ae88b962c49d4dc0e83e025@34.65.85.39:9735"
+                NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC addr)
+            | currency -> failwith <| SPrintF1 "Currency not supported: %A" currency
+        async {
+            let! _graph = client.CreateRoutingGraph node_id
+            // for now return nothing, as DirectedLNGraph is in assembly not referenced by frontend
+            ()
+        }
