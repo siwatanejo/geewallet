@@ -378,7 +378,10 @@ let rec PerformOperation (activeAccounts: seq<IAccount>): unit =
         }
         Console.WriteLine("Accounts created")
         UserInteraction.PressAnyKeyToContinue()
-    | Operations.Refresh -> ()
+    | Operations.Refresh -> 
+         // try to get routing gossip from some known node
+         // where to get NodeMasterPrivKey?
+         ()
     | Operations.SendPayment ->
         SendPayment()
     | Operations.AddReadonlyAccounts ->
