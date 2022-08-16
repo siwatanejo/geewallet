@@ -52,3 +52,5 @@ module public Network =
     let public EndPoint (nodeServer: NodeServer) = nodeServer.EndPoint
 
     let public AcceptUpdateFee (lightningNode: NodeServer) = lightningNode.AcceptUpdateFee
+
+    let public QueryRoutingGossip = PeerNode.QueryRoutingGossip
