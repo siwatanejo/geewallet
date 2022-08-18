@@ -11,6 +11,7 @@ open DotNetLightning.Channel
 open DotNetLightning.Channel.ClosingHelpers
 open DotNetLightning.Crypto
 open DotNetLightning.Utils
+open DotNetLightning.Serialization
 open DotNetLightning.Serialization.Msgs
 open DotNetLightning.Payment
 open ResultUtils.Portability
@@ -168,6 +169,8 @@ type internal NodeAcceptUpdateFeeError =
                 SPrintF1 "error accepting updating fee: %s" (acceptUpdateFeeError :> IErrorMsg).Message
         member self.ChannelBreakdown: bool =
             (self :> IErrorMsg).ChannelBreakdown
+
+exception RoutingQueryException of string
 
 type IChannelToBeOpened =
     abstract member ConfirmationsRequired: uint32 with get
@@ -368,6 +371,86 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
             | Ok activeChannel ->
                 (activeChannel :> IDisposable).Dispose()
                 return Ok ()
+        }
+
+    member private self.GetMessageStreamForRoutingGossip (nodeIdentifier: NodeIdentifier) (currency: Currency) : Async<MsgStream> = 
+        async {
+            let! transportStreamRes = TransportStream.Connect nodeMasterPrivKey nodeIdentifier
+            match transportStreamRes with
+            | Error handshakeError -> 
+                return raise (RoutingQueryException <| handshakeError.ToString())
+            | Ok transportStream -> 
+                let! transportStreamAfterInitSent =
+                    let mutable features = Settings.SupportedFeatures currency None
+                    // ChannelRangeQueries is gossip_queries
+                    features <- features.SetFeature Feature.ChannelRangeQueries FeaturesSupport.Optional true
+                    let plainInit: InitMsg = {
+                        Features = features
+                        TLVStream = [||]
+                    }
+                    let msg = plainInit :> ILightningMsg
+                    let bytes = msg.ToBytes()
+                    transportStream.SendBytes bytes
+
+                let! transportStreamAfterInitReceivedRes = transportStreamAfterInitSent.RecvBytes()
+
+                match transportStreamAfterInitReceivedRes with
+                | Error recvBytesError -> return raise (RoutingQueryException <| recvBytesError.ToString())
+                | Ok (transportStreamAfterInitReceived, bytes) ->
+                    match LightningMsg.fromBytes bytes with
+                    | Error msgError -> return raise (RoutingQueryException <| msgError.ToString())
+                    | Ok msg ->
+                        match msg with
+                        | :? InitMsg as initMsg ->
+                            let msgStream = { TransportStream = transportStreamAfterInitReceived }
+                            if initMsg.Features.HasFeature(Feature.ChannelRangeQueries) |> not then
+                                raise (RoutingQueryException "Remote node doesn't support initial_routing_sync")
+                            return msgStream
+                        | _ -> return raise (RoutingQueryException <| msg.ToString())
+        }
+
+    member internal self.QueryRoutingGossip (nodeIdentifier: NodeIdentifier)
+                                            (firstTimestamp: uint32)
+                                            (timestampRange: uint32) : Async<seq<IRoutingMsg>> =
+        async {
+            let currency = self.ChannelStore.Currency
+            let chainHash = 
+                match currency with
+                | BTC -> Network.Main.GenesisHash
+                | _ -> failwithf "Unsupported currency: %A" currency
+            let queryMsg = 
+                { 
+                    GossipTimestampFilterMsg.ChainHash=chainHash;
+                    FirstTimestamp=firstTimestamp; 
+                    TimestampRange=timestampRange 
+                }
+            try
+                let! initialStream = 
+                    self.GetMessageStreamForRoutingGossip nodeIdentifier currency
+                    |> Async.map (fun stream -> stream.SendMsg queryMsg)
+                let mutable stream = initialStream
+                let results = ResizeArray<IRoutingMsg>()
+                // How do we know when there is no more messages?
+                let startTime = System.DateTime.Now
+                let endTime = startTime.AddSeconds(2.0)
+                while DateTime.Now <= endTime do
+                    let! response = 
+                        let timeout = (endTime - DateTime.Now).TotalMilliseconds |> int |> max 0
+                        stream.RecvMsg() |> Async.withTimeout timeout
+                    match response with
+                    | Some(Error(e)) -> 
+                        // end up here on the first iteration
+                        // with e = RecvBytes (PeerDisconnected { Abruptly = false })
+                        return raise (RoutingQueryException <| e.ToString())
+                    | Some(Ok(newState, (:? IRoutingMsg as msg))) -> 
+                        results.Add msg
+                        stream <- newState
+                    | Some(Ok(_)) -> ()
+                    | None -> ()
+                return (results :> seq<_>)
+            with
+            | :? RoutingQueryException as exn ->
+                return Seq.empty
         }
 
 

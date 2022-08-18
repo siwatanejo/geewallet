@@ -1172,3 +1172,22 @@ module LayerTwo =
                                         }
                         }
         }
+
+    let GetRoutingInfo (accounts: seq<IAccount>) : Async<unit> =
+        async {
+            // try to get routing gossip from some known node
+            // where to get NodeMasterPrivKey?
+            match accounts.OfType<UtxoCoin.NormalUtxoAccount>() |> Seq.tryHead with
+            | Some(account) ->
+                let channelStore = ChannelStore account
+                do! UserInteraction.TryWithPasswordAsync (fun password -> async {
+                    let nodeClient = Lightning.Connection.StartClient channelStore password
+                    let toUnixTimestamp datetime = 
+                        (datetime - DateTime(1970, 1, 1)).TotalSeconds |> uint32
+                    let firstTimestamp = toUnixTimestamp(DateTime.Now - TimeSpan.FromDays(14.0))
+                    let timestampRange = toUnixTimestamp(DateTime.Now) - firstTimestamp
+                    do! Network.QueryRoutingGossip nodeClient firstTimestamp timestampRange
+                })
+            | None -> ()
+            return ()
+        }
