@@ -378,10 +378,7 @@ let rec PerformOperation (activeAccounts: seq<IAccount>): unit =
         }
         Console.WriteLine("Accounts created")
         UserInteraction.PressAnyKeyToContinue()
-    | Operations.Refresh -> 
-         // try to get routing gossip from some known node
-         // where to get NodeMasterPrivKey?
-         ()
+    | Operations.Refresh -> ()
     | Operations.SendPayment ->
         SendPayment()
     | Operations.AddReadonlyAccounts ->
@@ -478,6 +475,9 @@ let rec ProgramMainLoop() =
 
     //Rerun unresolved check 
     unresolvedHtlcsCheckJob |> Async.RunSynchronously |> ignore<array<bool>>
+
+    let routingInfoJob = LayerTwo.GetRoutingInfo activeAccounts
+    Async.RunSynchronously routingInfoJob
 
     Console.WriteLine ()
     Console.WriteLine "*** STATUS ***"
