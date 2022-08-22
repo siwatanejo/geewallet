@@ -59,11 +59,11 @@ module Settings =
         let featureBits =
             ((((FeatureBits.Zero
                     .SetFeature Feature.OptionDataLossProtect FeaturesSupport.Optional true)
+                    .SetFeature Feature.ChannelRangeQueries FeaturesSupport.Optional true)
                     .SetFeature Feature.VariableLengthOnion FeaturesSupport.Mandatory true)
                     .SetFeature Feature.OptionStaticRemoteKey FeaturesSupport.Mandatory true)
-                    .SetFeature Feature.OptionAnchorZeroFeeHtlcTx FeaturesSupport.Mandatory true)
-                    .SetFeature Feature.ChannelRangeQueries FeaturesSupport.Mandatory true
-        
+                    .SetFeature Feature.OptionAnchorZeroFeeHtlcTx FeaturesSupport.Mandatory true
+                    
         if currency = Currency.LTC then
             let featureType =
                 match fundingOpt with
