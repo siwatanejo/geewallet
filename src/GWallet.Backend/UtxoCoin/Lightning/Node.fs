@@ -13,6 +13,7 @@ open DotNetLightning.Crypto
 open DotNetLightning.Utils
 open DotNetLightning.Serialization
 open DotNetLightning.Serialization.Msgs
+open DotNetLightning.Routing.Graph
 open DotNetLightning.Payment
 open ResultUtils.Portability
 open NOnion.Directory
@@ -374,20 +375,27 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
         }
 
     member internal self.QueryRoutingGossip (nodeIdentifier: NodeIdentifier)
-                                            (firstTimestamp: uint32)
-                                            (timestampRange: uint32) : Async<seq<IRoutingMsg>> =
+                                            (timeRangeStart : DateTime)
+                                            (timeRangeEnd : DateTime) : Async<seq<IRoutingMsg>> =
         async {
+            let toUnixTimestamp datetime = 
+                (datetime - DateTime(1970, 1, 1)).TotalSeconds |> uint32
+            let firstTimestamp = toUnixTimestamp timeRangeStart
+            let timestampRange = (toUnixTimestamp timeRangeEnd) - firstTimestamp
+
             let currency = self.ChannelStore.Currency
             let chainHash = 
                 match currency with
                 | BTC -> Network.Main.GenesisHash
                 | _ -> failwithf "Unsupported currency: %A" currency
+
             let queryMsg = 
                 { 
                     GossipTimestampFilterMsg.ChainHash=chainHash;
                     FirstTimestamp=firstTimestamp; 
                     TimestampRange=timestampRange 
                 }
+
             try
                 let! initialNode = PeerNode.Connect nodeMasterPrivKey nodeIdentifier currency Money.Zero
                 let! initialNode = 
@@ -419,6 +427,22 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 return Seq.empty
         }
 
+    member internal self.CreateRoutingGraph (nodeIdentifier: NodeIdentifier) : Async<DirectedLNGraph> =
+        async {
+            let! gossipMessages =
+                self.QueryRoutingGossip nodeIdentifier (DateTime.Now - TimeSpan.FromDays(14.0)) DateTime.Now
+            let mutable graph = DirectedLNGraph.Create()
+
+            for message in gossipMessages do
+                match message with
+                | :? ChannelAnnouncementMsg as channelAnnouncement ->
+                    failwith "Not implemented"
+                | :? ChannelUpdateMsg as channelUpdate ->
+                    failwith "Not implemented"
+                | msg -> failwithf "Unexpected message type: %A" (msg.GetType())
+
+            return graph
+        }
 
 type NodeServer internal (channelStore: ChannelStore, transportListener: TransportListener) =
     member val ChannelStore = channelStore

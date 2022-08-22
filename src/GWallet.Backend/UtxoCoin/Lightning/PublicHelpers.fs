@@ -50,7 +50,7 @@ module public Network =
 
     let public AcceptUpdateFee (lightningNode: NodeServer) = lightningNode.AcceptUpdateFee
 
-    let public QueryRoutingGossip (client: NodeClient) (firstTimestamp: uint32) (timestampRange: uint32) = 
+    let public QueryRoutingGossip (client: NodeClient) (timeRangeStart : DateTime) (timeRangeEnd : DateTime) = 
         let bfx_lnd0_node = 
             match client.ChannelStore.Currency with
             | Currency.BTC ->
@@ -58,7 +58,7 @@ module public Network =
                 NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC addr)
             | currency -> failwithf "Currency not supported: %A" currency
         async {
-            let! messages = client.QueryRoutingGossip bfx_lnd0_node firstTimestamp timestampRange
+            let! messages = client.QueryRoutingGossip bfx_lnd0_node timeRangeStart timeRangeEnd
             // for now return nothing, as IRoutingMsg is in assembly not referenced by frontend
             let arr = messages |> Seq.toArray
             ()
