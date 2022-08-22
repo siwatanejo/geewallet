@@ -1182,11 +1182,7 @@ module LayerTwo =
                 let channelStore = ChannelStore account
                 do! UserInteraction.TryWithPasswordAsync (fun password -> async {
                     let nodeClient = Lightning.Connection.StartClient channelStore password
-                    let toUnixTimestamp datetime = 
-                        (datetime - DateTime(1970, 1, 1)).TotalSeconds |> uint32
-                    let firstTimestamp = toUnixTimestamp(DateTime.Now - TimeSpan.FromDays(14.0))
-                    let timestampRange = toUnixTimestamp(DateTime.Now) - firstTimestamp
-                    do! Network.QueryRoutingGossip nodeClient firstTimestamp timestampRange
+                    do! Network.QueryRoutingGossip nodeClient (DateTime.Now - TimeSpan.FromDays(14.0)) DateTime.Now
                 })
             | None -> ()
             return ()
