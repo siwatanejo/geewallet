@@ -59,10 +59,10 @@ module public Network =
             | Currency.BTC ->
                 let addr = "033d8656219478701227199cbd6f670335c8d408a92ae88b962c49d4dc0e83e025@34.65.85.39:9735"
                 NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC addr)
-            | currency -> failwithf "Currency not supported: %A" currency
+            | currency -> failwith <| SPrintF1 "Currency not supported: %A" currency
         async {
             let! messages = client.QueryRoutingGossip bfx_lnd0_node timeRangeStart timeRangeEnd
             // for now return nothing, as IRoutingMsg is in assembly not referenced by frontend
-            let arr = messages |> Seq.toArray
+            let _arr = messages |> Seq.toArray
             ()
         }
