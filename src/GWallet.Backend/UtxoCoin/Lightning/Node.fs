@@ -413,13 +413,13 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                         node.MsgStream.RecvMsg() |> Async.withTimeout timeout
                     match response with
                     | Some(Error(e)) -> 
-                        // end up here on the first iteration
-                        // with e = RecvBytes (PeerDisconnected { Abruptly = false })
                         return raise (RoutingQueryException <| e.ToString())
                     | Some(Ok(newState, (:? IRoutingMsg as msg))) -> 
                         results.Add msg
                         node <- { node with MsgStream = newState }
-                    | Some(Ok(_)) -> ()
+                    | Some(Ok(newState, _)) -> 
+                        // ignore all other messages
+                        node <- { node with MsgStream = newState }
                     | None -> ()
                 return (results :> seq<_>)
             with
@@ -431,16 +431,32 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
         async {
             let! gossipMessages =
                 self.QueryRoutingGossip nodeIdentifier (DateTime.Now - TimeSpan.FromDays(14.0)) DateTime.Now
-            let mutable graph = DirectedLNGraph.Create()
+            let channels = Collections.Generic.HashSet<ChannelDesc>()
+            let updates = Collections.Generic.Dictionary<ShortChannelId, ResizeArray<UnsignedChannelUpdateMsg>>()
 
             for message in gossipMessages do
                 match message with
-                | :? ChannelAnnouncementMsg as _channelAnnouncement ->
-                    failwith "Not implemented"
-                | :? ChannelUpdateMsg as _channelUpdate ->
-                    failwith "Not implemented"
-                | msg -> failwith <| SPrintF1 "Unexpected message type: %A" (msg.GetType())
+                | :? ChannelAnnouncementMsg as channelAnnouncement ->
+                    let ann = channelAnnouncement.Contents
+                    channels.Add { ShortChannelId = ann.ShortChannelId; A = ann.NodeId1; B = ann.NodeId2 }
+                    |> ignore
+                | :? ChannelUpdateMsg as channelUpdate ->
+                    let upd = channelUpdate.Contents
+                    match updates.TryGetValue upd.ShortChannelId with
+                    | true, storedUpdates -> storedUpdates.Add upd 
+                    | _ -> updates.[upd.ShortChannelId] <- ResizeArray([| upd |])
+                | :? NodeAnnouncementMsg ->
+                    ()
+                | _ -> 
+                    () // ignore gossip queries from peer?
 
+            channels.RemoveWhere(fun channel -> not (updates.ContainsKey channel.ShortChannelId)) |> ignore
+
+            let mutable graph = DirectedLNGraph.Create()
+            for channel in channels do 
+                for update in updates.[channel.ShortChannelId] do
+                    graph <- graph.AddEdge(channel, update)
+            
             return graph
         }
 
