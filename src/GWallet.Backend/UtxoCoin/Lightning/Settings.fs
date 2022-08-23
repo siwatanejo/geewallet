@@ -57,8 +57,7 @@ module Settings =
 
     let internal SupportedFeatures (currency: Currency) (fundingOpt: Option<Money>) =
         let featureBits =
-            ((((FeatureBits.Zero
-                .SetFeature Feature.OptionDataLossProtect FeaturesSupport.Optional true)
+            ((((FeatureBits.Zero.SetFeature Feature.OptionDataLossProtect FeaturesSupport.Optional true)
                 .SetFeature Feature.ChannelRangeQueries FeaturesSupport.Mandatory true)
                 .SetFeature Feature.VariableLengthOnion FeaturesSupport.Mandatory true)
                 .SetFeature Feature.OptionStaticRemoteKey FeaturesSupport.Mandatory true)
