@@ -387,7 +387,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
             let chainHash = 
                 match currency with
                 | BTC -> Network.Main.GenesisHash
-                | _ -> failwithf "Unsupported currency: %A" currency
+                | _ -> failwith <| SPrintF1 "Unsupported currency: %A" currency
 
             let queryMsg = 
                 { 
@@ -423,7 +423,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                     | None -> ()
                 return (results :> seq<_>)
             with
-            | :? RoutingQueryException as exn ->
+            | :? RoutingQueryException as _exn ->
                 return Seq.empty
         }
 
@@ -435,11 +435,11 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
 
             for message in gossipMessages do
                 match message with
-                | :? ChannelAnnouncementMsg as channelAnnouncement ->
+                | :? ChannelAnnouncementMsg as _channelAnnouncement ->
                     failwith "Not implemented"
-                | :? ChannelUpdateMsg as channelUpdate ->
+                | :? ChannelUpdateMsg as _channelUpdate ->
                     failwith "Not implemented"
-                | msg -> failwithf "Unexpected message type: %A" (msg.GetType())
+                | msg -> failwith <| SPrintF1 "Unexpected message type: %A" (msg.GetType())
 
             return graph
         }
