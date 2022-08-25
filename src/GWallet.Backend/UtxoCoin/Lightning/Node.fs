@@ -375,26 +375,21 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 return Ok ()
         }
 
-    member internal self.QueryRoutingGossip (nodeIdentifier: NodeIdentifier)
-                                            (timeRangeStart : DateTime)
-                                            (timeRangeEnd : DateTime) : Async<seq<IRoutingMsg>> =
+    member internal self.QueryRoutingGossip (nodeIdentifier: NodeIdentifier) : Async<seq<IRoutingMsg>> =
         async {
-            let toUnixTimestamp datetime = 
-                (datetime - DateTime(1970, 1, 1)).TotalSeconds |> uint32
-            let firstTimestamp = toUnixTimestamp timeRangeStart
-            let timestampRange = (toUnixTimestamp timeRangeEnd) - firstTimestamp
-
+            let firstBlocknum = 0u
+            let numberOfBlocks = 0xffffffffu
             let currency = self.ChannelStore.Currency
             let chainHash = 
                 match currency with
                 | BTC -> Network.Main.GenesisHash
                 | _ -> failwith <| SPrintF1 "Unsupported currency: %A" currency
-
             let queryMsg = 
                 { 
-                    GossipTimestampFilterMsg.ChainHash=chainHash;
-                    FirstTimestamp=firstTimestamp; 
-                    TimestampRange=timestampRange 
+                    QueryChannelRangeMsg.ChainHash=chainHash
+                    FirstBlockNum=BlockHeight(firstBlocknum)
+                    NumberOfBlocks=numberOfBlocks
+                    TLVs=[||]
                 }
 
             try
@@ -405,25 +400,43 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                     match initialNode with
                     | Ok(node) -> node.SendMsg queryMsg
                     | Error(e) -> raise (RoutingQueryException <| e.ToString())
-                let mutable node = initialNode
+                
                 let results = ResizeArray<IRoutingMsg>()
-                // How do we know when there is no more messages?
-                let startTime = System.DateTime.Now
-                let endTime = startTime.AddSeconds(2.0)
-                while DateTime.Now <= endTime do
-                    let! response = 
-                        let timeout = (endTime - DateTime.Now).TotalMilliseconds |> int |> max 0
-                        node.MsgStream.RecvMsg() |> Async.withTimeout timeout
-                    match response with
-                    | Some(Error(e)) -> 
-                        return raise (RoutingQueryException <| e.ToString())
-                    | Some(Ok(newState, (:? IRoutingMsg as msg))) -> 
-                        results.Add msg
-                        node <- { node with MsgStream = newState }
-                    | Some(Ok(newState, _)) -> 
-                        // ignore all other messages
-                        node <- { node with MsgStream = newState }
-                    | None -> ()
+
+                let rec processMessages(node: PeerNode) : Async<PeerNode> =
+                    async {
+                        let! response =
+                            let timeout = 1000 // in ms
+                            node.MsgStream.RecvMsg() |> Async.withTimeout timeout
+                        match response with
+                        | Some(Error(e)) -> 
+                            return raise (RoutingQueryException <| e.ToString())
+                        | Some(Ok(newState, (:? IRoutingMsg as msg))) -> 
+                            let node = { node with MsgStream = newState }
+                            match msg with
+                            | :? ReplyShortChannelIdsEndMsg -> 
+                                return node // end processing
+                            | :? ReplyChannelRangeMsg as replyChannelRange -> 
+                                let queryShortIdsMsg =
+                                    {
+                                        QueryShortChannelIdsMsg.ChainHash=chainHash
+                                        ShortIdsEncodingType=EncodingType.SortedPlain
+                                        ShortIds=replyChannelRange.ShortIds
+                                        TLVs=[||]
+                                    }
+                                let! newNodeState = node.SendMsg queryShortIdsMsg
+                                return! processMessages newNodeState
+                            | _ ->
+                                results.Add msg
+                                return! processMessages node
+                        | Some(Ok(newState, _msg)) -> 
+                            // ignore all other messages
+                            return! processMessages { node with MsgStream = newState }
+                        | None -> return node // timeout
+                    }
+
+                do! processMessages initialNode |> Async.Ignore
+                
                 return (results :> seq<_>)
             with
             | :? RoutingQueryException as _exn ->
@@ -432,8 +445,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
 
     member internal self.CreateRoutingGraph (nodeIdentifier: NodeIdentifier) : Async<DirectedLNGraph> =
         async {
-            let! gossipMessages =
-                self.QueryRoutingGossip nodeIdentifier (DateTime.Now - TimeSpan.FromDays(14.0)) DateTime.Now
+            let! gossipMessages = self.QueryRoutingGossip nodeIdentifier
             let channels = Collections.Generic.HashSet<ChannelDesc>()
             let updates = Collections.Generic.Dictionary<ShortChannelId, ResizeArray<UnsignedChannelUpdateMsg>>()
 
