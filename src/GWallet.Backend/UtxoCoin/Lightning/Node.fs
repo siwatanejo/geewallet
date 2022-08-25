@@ -257,6 +257,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 nodeIdentifier
                 ((self.Account :> IAccount).Currency)
                 (Money(channelCapacity.ValueToSend, MoneyUnit.BTC))
+                false
         match connectRes with
         | Error connectError ->
             if connectError.PossibleBug then
@@ -397,7 +398,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 }
 
             try
-                let! initialNode = PeerNode.Connect nodeMasterPrivKey nodeIdentifier currency Money.Zero
+                let! initialNode = PeerNode.Connect nodeMasterPrivKey nodeIdentifier currency Money.Zero true
                 let! initialNode = 
                     match initialNode with
                     | Ok(node) -> node.SendMsg queryMsg

@@ -93,10 +93,11 @@ type internal MsgStream =
     static member private InitializeTransportStream (transportStream: TransportStream)
                                                     (currency: Currency)
                                                     (fundingAmountOpt: Option<Money>)
+                                                    (isForRouting: bool)
                                                         : Async<Result<InitMsg * MsgStream, InitializeError>> = async {
         let! transportStreamAfterInitSent =
             let plainInit: InitMsg = {
-                Features = Settings.SupportedFeatures currency fundingAmountOpt
+                Features = Settings.SupportedFeatures currency fundingAmountOpt isForRouting
                 TLVStream = [||]
             }
             let msg = plainInit :> ILightningMsg
@@ -122,6 +123,7 @@ type internal MsgStream =
                                    (nodeIdentifier: NodeIdentifier)
                                    (currency: Currency)
                                    (fundingAmount: Money)
+                                   (isForRouting: bool)
                                        : Async<Result<InitMsg * MsgStream, ConnectError>> = async {
         let! transportStreamRes =
             TransportStream.Connect
@@ -130,7 +132,7 @@ type internal MsgStream =
         match transportStreamRes with
         | Error handshakeError -> return Error <| Handshake handshakeError
         | Ok transportStream -> 
-            let! initializeRes = MsgStream.InitializeTransportStream transportStream currency (Some fundingAmount)
+            let! initializeRes = MsgStream.InitializeTransportStream transportStream currency (Some fundingAmount) isForRouting
             match initializeRes with
             | Error initializeError -> return Error <| Initialize initializeError
             | Ok (initMsg, msgStream) -> return Ok (initMsg, msgStream)
@@ -145,7 +147,7 @@ type internal MsgStream =
         match transportStreamRes with
         | Error handshakeError -> return Error <| Handshake handshakeError
         | Ok transportStream ->
-            let! initializeRes = MsgStream.InitializeTransportStream transportStream currency fundingAmountOpt
+            let! initializeRes = MsgStream.InitializeTransportStream transportStream currency fundingAmountOpt false
             match initializeRes with
             | Error initializeError -> return Error <| Initialize initializeError
             | Ok (initMsg, msgStream) -> return Ok (initMsg, msgStream)

@@ -176,6 +176,7 @@ type internal ConnectedChannel =
                 nodeIdentifier
                 channelStore.Currency
                 (serializedChannel.Capacity())
+                false
         match connectRes with
         | Error connectError -> return Error <| Connect connectError
         | Ok peerNode ->
