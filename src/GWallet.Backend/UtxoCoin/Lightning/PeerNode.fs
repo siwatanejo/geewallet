@@ -42,9 +42,9 @@ and internal PeerNode =
                                    (nodeIndentifier: NodeIdentifier)
                                    (currency: Currency)
                                    (fundingAmount: Money)
-                                   (isForRouting: bool)
+                                   (purpose: ConnectionPurpose)
                                        : Async<Result<PeerNode, ConnectError>> = async {
-        let! connectRes = MsgStream.Connect nodeMasterPrivKey nodeIndentifier currency fundingAmount isForRouting
+        let! connectRes = MsgStream.Connect nodeMasterPrivKey nodeIndentifier currency fundingAmount purpose
         match connectRes with
         | Error connectError -> return Error connectError
         | Ok (initMsg, msgStream) ->

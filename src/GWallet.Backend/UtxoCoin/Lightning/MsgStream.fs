@@ -93,11 +93,11 @@ type internal MsgStream =
     static member private InitializeTransportStream (transportStream: TransportStream)
                                                     (currency: Currency)
                                                     (fundingAmountOpt: Option<Money>)
-                                                    (isForRouting: bool)
+                                                    (purpose: ConnectionPurpose)
                                                         : Async<Result<InitMsg * MsgStream, InitializeError>> = async {
         let! transportStreamAfterInitSent =
             let plainInit: InitMsg = {
-                Features = Settings.SupportedFeatures currency fundingAmountOpt isForRouting
+                Features = Settings.SupportedFeatures currency fundingAmountOpt purpose
                 TLVStream = [||]
             }
             let msg = plainInit :> ILightningMsg
@@ -123,7 +123,7 @@ type internal MsgStream =
                                    (nodeIdentifier: NodeIdentifier)
                                    (currency: Currency)
                                    (fundingAmount: Money)
-                                   (isForRouting: bool)
+                                   (purpose: ConnectionPurpose)
                                        : Async<Result<InitMsg * MsgStream, ConnectError>> = async {
         let! transportStreamRes =
             TransportStream.Connect
@@ -132,7 +132,7 @@ type internal MsgStream =
         match transportStreamRes with
         | Error handshakeError -> return Error <| Handshake handshakeError
         | Ok transportStream -> 
-            let! initializeRes = MsgStream.InitializeTransportStream transportStream currency (Some fundingAmount) isForRouting
+            let! initializeRes = MsgStream.InitializeTransportStream transportStream currency (Some fundingAmount) purpose
             match initializeRes with
             | Error initializeError -> return Error <| Initialize initializeError
             | Ok (initMsg, msgStream) -> return Ok (initMsg, msgStream)
@@ -147,7 +147,8 @@ type internal MsgStream =
         match transportStreamRes with
         | Error handshakeError -> return Error <| Handshake handshakeError
         | Ok transportStream ->
-            let! initializeRes = MsgStream.InitializeTransportStream transportStream currency fundingAmountOpt false
+            let connectionPurpose = ConnectionPurpose.ChannelOpening
+            let! initializeRes = MsgStream.InitializeTransportStream transportStream currency fundingAmountOpt connectionPurpose
             match initializeRes with
             | Error initializeError -> return Error <| Initialize initializeError
             | Ok (initMsg, msgStream) -> return Ok (initMsg, msgStream)
