@@ -57,11 +57,12 @@ module Settings =
 
     let internal SupportedFeatures (currency: Currency) (fundingOpt: Option<Money>) =
         let featureBits =
-            (((FeatureBits.Zero
+            ((((FeatureBits.Zero
                 .SetFeature Feature.OptionDataLossProtect FeaturesSupport.Optional true)
                 .SetFeature Feature.VariableLengthOnion FeaturesSupport.Mandatory true)
                 .SetFeature Feature.OptionStaticRemoteKey FeaturesSupport.Mandatory true)
-                .SetFeature Feature.OptionAnchorZeroFeeHtlcTx FeaturesSupport.Mandatory true
+                .SetFeature Feature.OptionAnchorZeroFeeHtlcTx FeaturesSupport.Mandatory true)
+                .SetFeature Feature.ChannelRangeQueries FeaturesSupport.Mandatory true
 
         if currency = Currency.LTC then
             let featureType =
