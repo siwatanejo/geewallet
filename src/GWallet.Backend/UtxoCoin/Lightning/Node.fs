@@ -401,41 +401,66 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                     | Ok(node) -> node.SendMsg queryMsg
                     | Error(e) -> raise (RoutingQueryException <| e.ToString())
                 
+                let shortChannelIds = ResizeArray<ShortChannelId>()
+
+                let rec queryShortChannelIds (node: PeerNode) : Async<PeerNode> =
+                    async {
+                        let! response = node.MsgStream.RecvMsg()
+                        match response with
+                        | Error(e) -> 
+                            return raise (RoutingQueryException <| e.ToString())
+                        | Ok(newState, (:? ReplyChannelRangeMsg as replyChannelRange)) -> 
+                            let node = { node with MsgStream = newState }
+                            shortChannelIds.AddRange replyChannelRange.ShortIds
+                            if replyChannelRange.Complete then
+                                return node
+                            else
+                                return! queryShortChannelIds node
+                        | Ok(newState, _msg) -> 
+                            // ignore all other messages
+                            return! queryShortChannelIds { node with MsgStream = newState }
+                    }
+
+                let! node = queryShortChannelIds initialNode
+
+                let batches = shortChannelIds |> Seq.chunkBySize 100 |> Collections.Generic.Queue
                 let results = ResizeArray<IRoutingMsg>()
 
-                let rec processMessages(node: PeerNode) : Async<PeerNode> =
+                let rec processMessages (node: PeerNode) : Async<PeerNode> =
                     async {
-                        let! response =
-                            let timeout = 1000 // in ms
-                            node.MsgStream.RecvMsg() |> Async.withTimeout timeout
+                        let! response = node.MsgStream.RecvMsg()
                         match response with
-                        | Some(Error(e)) -> 
+                        | Error(e) -> 
                             return raise (RoutingQueryException <| e.ToString())
-                        | Some(Ok(newState, (:? IRoutingMsg as msg))) -> 
+                        | Ok(newState, (:? IRoutingMsg as msg)) -> 
                             let node = { node with MsgStream = newState }
                             match msg with
-                            | :? ReplyShortChannelIdsEndMsg -> 
-                                return node // end processing
-                            | :? ReplyChannelRangeMsg as replyChannelRange -> 
-                                let queryShortIdsMsg =
-                                    {
-                                        QueryShortChannelIdsMsg.ChainHash=chainHash
-                                        ShortIdsEncodingType=EncodingType.SortedPlain
-                                        ShortIds=replyChannelRange.ShortIds
-                                        TLVs=[||]
-                                    }
-                                let! newNodeState = node.SendMsg queryShortIdsMsg
-                                return! processMessages newNodeState
+                            | :? ReplyShortChannelIdsEndMsg as _channelIdsEnd -> 
+                                if batches.Count = 0 then
+                                    return node // end processing
+                                else
+                                    return! sendNextBatch node
                             | _ ->
                                 results.Add msg
                                 return! processMessages node
-                        | Some(Ok(newState, _msg)) -> 
+                        | Ok(newState, _msg) -> 
                             // ignore all other messages
                             return! processMessages { node with MsgStream = newState }
-                        | None -> return node // timeout
+                    }
+                and sendNextBatch (node: PeerNode) : Async<PeerNode> =
+                    async {
+                        let queryShortIdsMsg =
+                            {
+                                QueryShortChannelIdsMsg.ChainHash=chainHash
+                                ShortIdsEncodingType=EncodingType.SortedPlain
+                                ShortIds=batches.Dequeue()
+                                TLVs=[||]
+                            }
+                        let! node = node.SendMsg queryShortIdsMsg
+                        return! processMessages node
                     }
 
-                do! processMessages initialNode |> Async.Ignore
+                do! processMessages node |> Async.Ignore
                 
                 return (results :> seq<_>)
             with
@@ -460,13 +485,14 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                     match updates.TryGetValue upd.ShortChannelId with
                     | true, storedUpdates -> storedUpdates.Add upd 
                     | _ -> updates.[upd.ShortChannelId] <- ResizeArray([| upd |])
-                | :? NodeAnnouncementMsg ->
+                | :? NodeAnnouncementMsg as _msg ->
                     ()
                 | _ -> 
                     () // ignore gossip queries from peer?
 
+            let ids = channels |> Seq.map (fun x -> x.ShortChannelId) |> Set.ofSeq
             channels.RemoveWhere(fun channel -> not (updates.ContainsKey channel.ShortChannelId)) |> ignore
-
+            
             let mutable graph = DirectedLNGraph.Create()
             for channel in channels do 
                 for update in updates.[channel.ShortChannelId] do
