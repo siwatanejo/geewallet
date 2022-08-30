@@ -423,7 +423,8 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
 
                 let! node = queryShortChannelIds initialNode
 
-                let batches = shortChannelIds |> Seq.chunkBySize 100 |> Collections.Generic.Queue
+                let batchSize = 1000
+                let batches = shortChannelIds |> Seq.chunkBySize batchSize |> Collections.Generic.Queue
                 let results = ResizeArray<IRoutingMsg>()
 
                 let rec processMessages (node: PeerNode) : Async<PeerNode> =
@@ -460,7 +461,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                         return! processMessages node
                     }
 
-                do! processMessages node |> Async.Ignore
+                do! sendNextBatch node |> Async.Ignore
                 
                 return (results :> seq<_>)
             with
@@ -471,14 +472,13 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
     member internal self.CreateRoutingGraph (nodeIdentifier: NodeIdentifier) : Async<DirectedLNGraph> =
         async {
             let! gossipMessages = self.QueryRoutingGossip nodeIdentifier
-            let channels = Collections.Generic.HashSet<ChannelDesc>()
+            let announcements = Collections.Generic.HashSet<UnsignedChannelAnnouncementMsg>()
             let updates = Collections.Generic.Dictionary<ShortChannelId, ResizeArray<UnsignedChannelUpdateMsg>>()
 
             for message in gossipMessages do
                 match message with
                 | :? ChannelAnnouncementMsg as channelAnnouncement ->
-                    let ann = channelAnnouncement.Contents
-                    channels.Add { ShortChannelId = ann.ShortChannelId; A = ann.NodeId1; B = ann.NodeId2 }
+                    announcements.Add channelAnnouncement.Contents
                     |> ignore
                 | :? ChannelUpdateMsg as channelUpdate ->
                     let upd = channelUpdate.Contents
@@ -489,16 +489,26 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                     ()
                 | _ -> 
                     () // ignore gossip queries from peer?
-
-            let ids = channels |> Seq.map (fun x -> x.ShortChannelId) |> Set.ofSeq
-            channels.RemoveWhere(fun channel -> not (updates.ContainsKey channel.ShortChannelId)) |> ignore
             
-            let mutable graph = DirectedLNGraph.Create()
-            for channel in channels do 
-                for update in updates.[channel.ShortChannelId] do
-                    graph <- graph.AddEdge(channel, update)
+            announcements.RemoveWhere(fun ann -> not(updates.ContainsKey ann.ShortChannelId)) |> ignore
+            let publicChannels : Map<ShortChannelId, PublicChannel> =
+                seq {
+                    for ann in announcements do
+                        let updateList = updates.[ann.ShortChannelId]
+                        updateList.Sort(fun a b -> int(a.Timestamp) - int(b.Timestamp))
+                        let upd1opt = 
+                            updateList 
+                            |> Seq.filter (fun upd -> (upd.ChannelFlags &&& 1uy) = 0uy)
+                            |> Seq.tryLast
+                        let upd2opt = 
+                            updateList 
+                            |> Seq.filter (fun upd -> (upd.ChannelFlags &&& 1uy) <> 0uy)
+                            |> Seq.tryLast
+                        yield ann.ShortChannelId, PublicChannel.Create(ann, TxId.Zero, Money.Zero, upd1opt, upd2opt)
+                }
+                |> Map.ofSeq
             
-            return graph
+            return DirectedLNGraph.MakeGraph(publicChannels)
         }
 
 type NodeServer internal (channelStore: ChannelStore, transportListener: TransportListener) =
