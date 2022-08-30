@@ -173,6 +173,20 @@ type internal NodeAcceptUpdateFeeError =
 
 exception RoutingQueryException of string
 
+type RoutingGrpahEdge = 
+    {
+        Source : NodeId
+        Target : NodeId
+        ShortChannelId : ShortChannelId
+        Update: UnsignedChannelUpdateMsg
+    }
+    with
+        interface QuikGraph.IEdge<NodeId> with
+            member this.Source = this.Source
+            member this.Target = this.Target
+
+type RoutingGraph = QuikGraph.ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
+
 type IChannelToBeOpened =
     abstract member ConfirmationsRequired: uint32 with get
 
@@ -469,7 +483,7 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 return Seq.empty
         }
 
-    member internal self.CreateRoutingGraph (nodeIdentifier: NodeIdentifier) : Async<DirectedLNGraph> =
+    member internal self.CreateRoutingGraph (nodeIdentifier: NodeIdentifier) : Async<RoutingGraph> =
         async {
             let! gossipMessages = self.QueryRoutingGossip nodeIdentifier
             let announcements = Collections.Generic.HashSet<UnsignedChannelAnnouncementMsg>()
@@ -491,24 +505,26 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                     () // ignore gossip queries from peer?
             
             announcements.RemoveWhere(fun ann -> not(updates.ContainsKey ann.ShortChannelId)) |> ignore
-            let publicChannels : Map<ShortChannelId, PublicChannel> =
-                seq {
-                    for ann in announcements do
-                        let updateList = updates.[ann.ShortChannelId]
-                        updateList.Sort(fun a b -> int(a.Timestamp) - int(b.Timestamp))
-                        let upd1opt = 
-                            updateList 
-                            |> Seq.filter (fun upd -> (upd.ChannelFlags &&& 1uy) = 0uy)
-                            |> Seq.tryLast
-                        let upd2opt = 
-                            updateList 
-                            |> Seq.filter (fun upd -> (upd.ChannelFlags &&& 1uy) <> 0uy)
-                            |> Seq.tryLast
-                        yield ann.ShortChannelId, PublicChannel.Create(ann, TxId.Zero, Money.Zero, upd1opt, upd2opt)
-                }
-                |> Map.ofSeq
+            let baseGraph = QuikGraph.AdjacencyGraph<NodeId, RoutingGrpahEdge>()
+
+            for ann in announcements do
+                let updateList = updates.[ann.ShortChannelId]
+                updateList.Sort(fun a b -> int(a.Timestamp) - int(b.Timestamp))
+
+                let addEdge source traget (upd : UnsignedChannelUpdateMsg) =
+                    let edge = { Source=source; Target=traget; ShortChannelId=upd.ShortChannelId; Update=upd }
+                    baseGraph.AddVerticesAndEdge edge |> ignore
+                
+                // update direction: forward
+                updateList 
+                |> Seq.tryFindBack (fun upd -> (upd.ChannelFlags &&& 1uy) = 0uy)
+                |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
+                // update direction: backward
+                updateList 
+                |> Seq.tryFindBack (fun upd -> (upd.ChannelFlags &&& 1uy) <> 0uy)
+                |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
             
-            return DirectedLNGraph.MakeGraph(publicChannels)
+            return RoutingGraph(baseGraph)
         }
 
 type NodeServer internal (channelStore: ChannelStore, transportListener: TransportListener) =

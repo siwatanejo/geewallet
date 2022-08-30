@@ -55,6 +55,7 @@
       <dependency id="System.Threading" version="4.3.0" />
       <dependency id="System.Threading.Tasks.Extensions" version="4.5.4" />
       <dependency id="Xamarin.Essentials" version="1.0.0" />
+	  <dependency id="QuikGraph" Version="2.5.0" />
     </dependencies>
   </metadata>
   <files>
