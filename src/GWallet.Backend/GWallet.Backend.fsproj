@@ -103,6 +103,7 @@
     <Compile Include="UtxoCoin\Lightning\ClosedChannel.fs" />
     <Compile Include="UtxoCoin\Lightning\ChainWatcher.fs" />
     <Compile Include="UtxoCoin\Lightning\Node.fs" />
+    <Compile Include="UtxoCoin\Lightning\Routing.fs" />
     <Compile Include="UtxoCoin\Lightning\PublicHelpers.fs" />
     <Compile Include="Ether\EtherExceptions.fs" />
     <Compile Include="Ether\EtherMinerFee.fs" />
@@ -351,7 +352,7 @@
     <Reference Include="System.Text.Encodings.Web">
       <HintPath>..\..\packages\System.Text.Encodings.Web.5.0.1\lib\net461\System.Text.Encodings.Web.dll</HintPath>
     </Reference>
-	<Reference Include="QuikGraph">
+    <Reference Include="QuikGraph">
       <HintPath>..\..\packages\QuikGraph.2.5.0\lib\net45\QuikGraph.dll</HintPath>
     </Reference>
   </ItemGroup>

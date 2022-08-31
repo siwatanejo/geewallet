@@ -1178,12 +1178,7 @@ module LayerTwo =
             // try to get routing gossip from some known node
             // where to get NodeMasterPrivKey?
             match accounts.OfType<UtxoCoin.NormalUtxoAccount>() |> Seq.tryHead with
-            | Some(account) ->
-                let channelStore = ChannelStore account
-                do! UserInteraction.TryWithPasswordAsync (fun password -> async {
-                    let nodeClient = Lightning.Connection.StartClient channelStore password
-                    do! Network.QueryRoutingGossip nodeClient
-                })
+            | Some(account) -> do! Network.UpdateRoutingGossip account
             | None -> ()
             return ()
         }
