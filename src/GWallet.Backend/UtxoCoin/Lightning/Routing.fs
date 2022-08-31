@@ -30,6 +30,27 @@ type RoutingGrpahEdge =
 type RoutingGraph = QuikGraph.ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
 
 
+type RoutingState(graph: RoutingGraph) =
+    let mutable graph = graph
+
+    member val IsUpdating = false with get, set
+
+    member self.Graph = graph
+
+    member internal this.SetGraph(newGraph) =
+        graph <- newGraph
+    
+    member self.IsEmpty = graph.IsEdgesEmpty
+
+    static member Empty = RoutingState(RoutingGraph(AdjacencyGraph()))
+
+    member self.Serialize(stream: IO.Stream) =
+        failwith "not implemented"
+
+    member self.Deserialize(stream: IO.Stream) =
+        failwith "not implemented"
+
+
 module Routing =
     exception RoutingQueryException of string
 
@@ -53,7 +74,7 @@ module Routing =
                     | _ -> { self with Backward = Some(update) }
     
 
-    let mutable private graph : RoutingGraph option = None
+    let routingState = RoutingState.Empty
 
 
     let internal QueryRoutingGossip (currency: Currency) (nodeIdentifier: NodeIdentifier) : Async<seq<IRoutingMsg>> =
@@ -210,12 +231,14 @@ module Routing =
                 NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC addr)
             | currency -> failwith <| SPrintF1 "Currency not supported: %A" currency
         async {
-            // TODO: avoid concurrent updates
-            match graph with
-            | Some(_routingGraph) -> 
-                () // TODO: update
-            | None ->
-                let! newGraph = CreateRoutingGraph currency node_id
-                graph <- Some newGraph
-                ()
+            if not routingState.IsUpdating then
+                routingState.IsUpdating <- true
+                try
+                    if routingState.IsEmpty then
+                        let! newGraph = CreateRoutingGraph currency node_id
+                        routingState.SetGraph newGraph
+                    else
+                        () // TODO: update
+                finally
+                    routingState.IsUpdating <- false
         }
