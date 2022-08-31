@@ -1,6 +1,7 @@
 ﻿namespace GWallet.Backend.UtxoCoin.Lightning
 
 open System
+open System.IO
 
 open GWallet.Backend
 open GWallet.Backend.FSharpUtil
@@ -30,8 +31,29 @@ type RoutingGrpahEdge =
 type RoutingGraph = QuikGraph.ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
 
 
+type private ChannelUpdates =
+    {
+        Forward: UnsignedChannelUpdateMsg option
+        Backward: UnsignedChannelUpdateMsg option
+    }
+    with
+        static member Empty = { Forward = None; Backward = None }
+
+        member self.With(update: UnsignedChannelUpdateMsg) =
+            let isForward = (update.ChannelFlags &&& 1uy) = 0uy
+            if isForward then
+                match self.Forward with
+                | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
+                | _ -> { self with Forward = Some(update) }
+            else
+                match self.Backward with
+                | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
+                | _ -> { self with Backward = Some(update) }
+
+
 type RoutingState(graph: RoutingGraph) =
     let mutable graph = graph
+    let allAnnouncementMessages = Collections.Generic.HashSet<UnsignedChannelAnnouncementMsg>()
 
     member val IsUpdating = false with get, set
 
@@ -43,40 +65,69 @@ type RoutingState(graph: RoutingGraph) =
     member self.IsEmpty = graph.IsEdgesEmpty
 
     static member Empty = RoutingState(RoutingGraph(AdjacencyGraph()))
+    
+    member self.ProcessGossipMessages(gossipMessages: seq<IRoutingMsg>) =
+        let announcements = Collections.Generic.HashSet<UnsignedChannelAnnouncementMsg>()
+        let updates = Collections.Generic.Dictionary<ShortChannelId, ChannelUpdates>()
 
-    member self.Serialize(stream: IO.Stream) =
+        for message in gossipMessages do
+            match message with
+            | :? ChannelAnnouncementMsg as channelAnnouncement ->
+                announcements.Add channelAnnouncement.Contents
+                |> ignore
+            | :? ChannelUpdateMsg as channelUpdate ->
+                let upd = channelUpdate.Contents
+                match updates.TryGetValue upd.ShortChannelId with
+                | true, storedUpdates -> 
+                    updates.[upd.ShortChannelId] <- storedUpdates.With upd
+                | _ -> 
+                    updates.[upd.ShortChannelId] <- ChannelUpdates.Empty.With upd
+            | :? NodeAnnouncementMsg as _msg ->
+                ()
+            | _ -> 
+                () // ignore gossip queries from peer
+        
+        announcements.RemoveWhere(fun ann -> not(updates.ContainsKey ann.ShortChannelId)) |> ignore
+        
+        allAnnouncementMessages.UnionWith announcements
+        
+        let tempGraph = QuikGraph.AdjacencyGraph<NodeId, RoutingGrpahEdge>()
+        tempGraph.AddVerticesAndEdgeRange(graph.Edges) |> ignore
+
+        for ann in announcements do
+            let updates = updates.[ann.ShortChannelId]
+            
+            let addEdge source traget (upd : UnsignedChannelUpdateMsg) =
+                let edge = { Source=source; Target=traget; Update=upd }
+                tempGraph.AddVerticesAndEdge edge |> ignore
+            
+            updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
+            updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
+        
+        graph <- RoutingGraph(tempGraph)
+
+    member self.Serialize(stream: Stream) =
+        use lightningStream = new DotNetLightning.Serialization.LightningWriterStream(stream)
+        self.DumpGossipMessages lightningStream
+
+    member self.Deserialize(stream: Stream) =
+        use lightningStream = new DotNetLightning.Serialization.LightningWriterStream(stream)
         failwith "not implemented"
 
-    member self.Deserialize(stream: IO.Stream) =
+    member self.DumpGossipMessages(stream: DotNetLightning.Serialization.LightningWriterStream) =
         failwith "not implemented"
+        // we will not know types of messages when deserializing
+        for annMsg in allAnnouncementMessages do
+            (annMsg :> ILightningSerializable<_>).Serialize stream
+        for { Update=upd } in graph.Edges do
+            (upd :> ILightningSerializable<_>).Serialize stream
 
 
 module Routing =
     exception RoutingQueryException of string
 
-    type private ChannelUpdates =
-        {
-            Forward: UnsignedChannelUpdateMsg option
-            Backward: UnsignedChannelUpdateMsg option
-        }
-        with
-            static member Empty = { Forward = None; Backward = None }
-
-            member self.With(update: UnsignedChannelUpdateMsg) =
-                let isForward = (update.ChannelFlags &&& 1uy) = 0uy
-                if isForward then
-                    match self.Forward with
-                    | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
-                    | _ -> { self with Forward = Some(update) }
-                else
-                    match self.Backward with
-                    | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
-                    | _ -> { self with Backward = Some(update) }
-    
-
     let routingState = RoutingState.Empty
-
-
+    
     let internal QueryRoutingGossip (currency: Currency) (nodeIdentifier: NodeIdentifier) : Async<seq<IRoutingMsg>> =
         async {
             let firstBlocknum = 0u
@@ -182,63 +233,30 @@ module Routing =
             | :? RoutingQueryException as _exn ->
                 return Seq.empty
         }
-
-    let internal CreateRoutingGraph (currency: Currency) (nodeIdentifier: NodeIdentifier) : Async<RoutingGraph> =
-        async {
-            let! gossipMessages = QueryRoutingGossip currency nodeIdentifier
-            let announcements = Collections.Generic.HashSet<UnsignedChannelAnnouncementMsg>()
-            let updates = Collections.Generic.Dictionary<ShortChannelId, ChannelUpdates>()
-
-            for message in gossipMessages do
-                match message with
-                | :? ChannelAnnouncementMsg as channelAnnouncement ->
-                    announcements.Add channelAnnouncement.Contents
-                    |> ignore
-                | :? ChannelUpdateMsg as channelUpdate ->
-                    let upd = channelUpdate.Contents
-                    match updates.TryGetValue upd.ShortChannelId with
-                    | true, storedUpdates -> 
-                        updates.[upd.ShortChannelId] <- storedUpdates.With upd
-                    | _ -> 
-                        updates.[upd.ShortChannelId] <- ChannelUpdates.Empty.With upd
-                | :? NodeAnnouncementMsg as _msg ->
-                    ()
-                | _ -> 
-                    () // ignore gossip queries from peer
-        
-            announcements.RemoveWhere(fun ann -> not(updates.ContainsKey ann.ShortChannelId)) |> ignore
-            let baseGraph = QuikGraph.AdjacencyGraph<NodeId, RoutingGrpahEdge>()
-
-            for ann in announcements do
-                let updates = updates.[ann.ShortChannelId]
-                
-                let addEdge source traget (upd : UnsignedChannelUpdateMsg) =
-                    let edge = { Source=source; Target=traget; Update=upd }
-                    baseGraph.AddVerticesAndEdge edge |> ignore
-                
-                updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
-                updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
-        
-            return RoutingGraph(baseGraph)
-        }
-
+    
     let UpdateRoutingGraph currency =
-        let node_id = 
+        let nodeId = 
             match currency with
             | Currency.BTC ->
-                let addr = "033d8656219478701227199cbd6f670335c8d408a92ae88b962c49d4dc0e83e025@34.65.85.39:9735"
-                    //"0279ff5e458ad89aa30b7e7092acdd30e9aeb470a02da4d6796af260faf31c90ac@127.0.0.1:9735"
+                let addr = //"033d8656219478701227199cbd6f670335c8d408a92ae88b962c49d4dc0e83e025@34.65.85.39:9735"
+                    "0279ff5e458ad89aa30b7e7092acdd30e9aeb470a02da4d6796af260faf31c90ac@127.0.0.1:9735"
                 NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC addr)
             | currency -> failwith <| SPrintF1 "Currency not supported: %A" currency
         async {
             if not routingState.IsUpdating then
                 routingState.IsUpdating <- true
                 try
-                    if routingState.IsEmpty then
-                        let! newGraph = CreateRoutingGraph currency node_id
-                        routingState.SetGraph newGraph
-                    else
-                        () // TODO: update
+                    let cacheDir = Config.GetCacheDir()
+                    let cacheFile = FileInfo(Path.Combine(cacheDir.FullName, "routingGraph.bin"))
+                    if cacheFile.Exists then
+                        use stream = cacheFile.Open(FileMode.Open)
+                        routingState.Deserialize(stream)
+                    
+                    let! gossipMessages = QueryRoutingGossip currency nodeId
+                    routingState.ProcessGossipMessages gossipMessages
+
+                    use stream = cacheFile.Open(FileMode.Create)
+                    routingState.Serialize(stream)
                 finally
                     routingState.IsUpdating <- false
         }
