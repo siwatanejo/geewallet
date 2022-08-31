@@ -33,7 +33,28 @@ type RoutingGraph = QuikGraph.ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
 module Routing =
     exception RoutingQueryException of string
 
+    type private ChannelUpdates =
+        {
+            Forward: UnsignedChannelUpdateMsg option
+            Backward: UnsignedChannelUpdateMsg option
+        }
+        with
+            static member Empty = { Forward = None; Backward = None }
+
+            member self.With(update: UnsignedChannelUpdateMsg) =
+                let isForward = (update.ChannelFlags &&& 1uy) = 0uy
+                if isForward then
+                    match self.Forward with
+                    | Some(prevUpd) when update.Timestamp >= prevUpd.Timestamp -> { self with Forward = Some(update) }
+                    | _ -> self
+                else
+                    match self.Backward with
+                    | Some(prevUpd) when update.Timestamp >= prevUpd.Timestamp -> { self with Backward = Some(update) }
+                    | _ -> self
+    
+
     let mutable private graph : RoutingGraph option = None
+
 
     let internal QueryRoutingGossip (currency: Currency) (nodeIdentifier: NodeIdentifier) : Async<seq<IRoutingMsg>> =
         async {
@@ -134,7 +155,7 @@ module Routing =
         async {
             let! gossipMessages = QueryRoutingGossip currency nodeIdentifier
             let announcements = Collections.Generic.HashSet<UnsignedChannelAnnouncementMsg>()
-            let updates = Collections.Generic.Dictionary<ShortChannelId, ResizeArray<UnsignedChannelUpdateMsg>>()
+            let updates = Collections.Generic.Dictionary<ShortChannelId, ChannelUpdates>()
 
             for message in gossipMessages do
                 match message with
@@ -144,32 +165,27 @@ module Routing =
                 | :? ChannelUpdateMsg as channelUpdate ->
                     let upd = channelUpdate.Contents
                     match updates.TryGetValue upd.ShortChannelId with
-                    | true, storedUpdates -> storedUpdates.Add upd 
-                    | _ -> updates.[upd.ShortChannelId] <- ResizeArray([| upd |])
+                    | true, storedUpdates -> 
+                        updates.[upd.ShortChannelId] <- storedUpdates.With upd
+                    | _ -> 
+                        updates.[upd.ShortChannelId] <- ChannelUpdates.Empty.With upd
                 | :? NodeAnnouncementMsg as _msg ->
                     ()
                 | _ -> 
-                    () // ignore gossip queries from peer?
+                    () // ignore gossip queries from peer
         
             announcements.RemoveWhere(fun ann -> not(updates.ContainsKey ann.ShortChannelId)) |> ignore
             let baseGraph = QuikGraph.AdjacencyGraph<NodeId, RoutingGrpahEdge>()
 
             for ann in announcements do
-                let updateList = updates.[ann.ShortChannelId]
-                updateList.Sort(fun a b -> int(a.Timestamp) - int(b.Timestamp))
-
+                let updates = updates.[ann.ShortChannelId]
+                
                 let addEdge source traget (upd : UnsignedChannelUpdateMsg) =
                     let edge = { Source=source; Target=traget; Update=upd }
                     baseGraph.AddVerticesAndEdge edge |> ignore
-            
-                // update direction: forward
-                updateList 
-                |> Seq.tryFindBack (fun upd -> (upd.ChannelFlags &&& 1uy) = 0uy)
-                |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
-                // update direction: backward
-                updateList 
-                |> Seq.tryFindBack (fun upd -> (upd.ChannelFlags &&& 1uy) <> 0uy)
-                |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
+                
+                updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
+                updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
         
             return RoutingGraph(baseGraph)
         }
