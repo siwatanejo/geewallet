@@ -45,12 +45,12 @@ module Routing =
                 let isForward = (update.ChannelFlags &&& 1uy) = 0uy
                 if isForward then
                     match self.Forward with
-                    | Some(prevUpd) when update.Timestamp >= prevUpd.Timestamp -> { self with Forward = Some(update) }
-                    | _ -> self
+                    | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
+                    | _ -> { self with Forward = Some(update) }
                 else
                     match self.Backward with
-                    | Some(prevUpd) when update.Timestamp >= prevUpd.Timestamp -> { self with Backward = Some(update) }
-                    | _ -> self
+                    | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
+                    | _ -> { self with Backward = Some(update) }
     
 
     let mutable private graph : RoutingGraph option = None
