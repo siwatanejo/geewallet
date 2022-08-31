@@ -50,4 +50,4 @@ module public Network =
 
     let public AcceptUpdateFee (lightningNode: NodeServer) = lightningNode.AcceptUpdateFee
 
-    let public UpdateRoutingGossip (account: IAccount) = Routing.UpdateRoutingGraph account.Currency
+    let public UpdateRoutingGraph (account: IAccount) = Routing.UpdateRoutingGraph account.Currency

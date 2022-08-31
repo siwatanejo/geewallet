@@ -1173,12 +1173,10 @@ module LayerTwo =
                         }
         }
 
-    let GetRoutingInfo (accounts: seq<IAccount>) : Async<unit> =
+    let UpdateRoutingInfo (accounts: seq<IAccount>) : Async<unit> =
         async {
-            // try to get routing gossip from some known node
-            // where to get NodeMasterPrivKey?
             match accounts.OfType<UtxoCoin.NormalUtxoAccount>() |> Seq.tryHead with
-            | Some(account) -> do! Network.UpdateRoutingGossip account
+            | Some(account) -> do! Network.UpdateRoutingGraph account
             | None -> ()
             return ()
         }

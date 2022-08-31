@@ -476,7 +476,7 @@ let rec ProgramMainLoop() =
     //Rerun unresolved check
     unresolvedHtlcsCheckJob |> Async.RunSynchronously |> ignore<array<bool>>
 
-    let routingInfoJob = LayerTwo.GetRoutingInfo activeAccounts
+    let routingInfoJob = LayerTwo.UpdateRoutingInfo activeAccounts
     Async.RunSynchronously routingInfoJob
 
     Console.WriteLine ()
