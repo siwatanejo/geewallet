@@ -98,8 +98,11 @@ module Routing =
                                 return node
                             else
                                 return! queryShortChannelIds node
-                        | Ok(newState, _msg) -> 
+                        | Ok(newState, msg) -> 
                             // ignore all other messages
+                            let logMsg = 
+                                SPrintF1 "Received unexpected message while processing reply_channel_range messages:\n %A" msg
+                            Infrastructure.LogDebug logMsg
                             return! queryShortChannelIds { node with MsgStream = newState }
                     }
 
@@ -126,8 +129,11 @@ module Routing =
                             | _ ->
                                 results.Add msg
                                 return! processMessages node
-                        | Ok(newState, _msg) -> 
+                        | Ok(newState, msg) -> 
                             // ignore all other messages
+                            let logMsg = 
+                                SPrintF1 "Received unexpected message while processing routing messages:\n %A" msg
+                            Infrastructure.LogDebug logMsg
                             return! processMessages { node with MsgStream = newState }
                     }
                 and sendNextBatch (node: PeerNode) : Async<PeerNode> =
