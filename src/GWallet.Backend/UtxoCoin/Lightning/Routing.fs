@@ -74,10 +74,12 @@ module Routing =
                 }
 
             try
-                let throwawayPrivKey = NodeMasterPrivKey.NodeMasterPrivKey(ExtKey())
                 let! initialNode = 
+                    let throwawayPrivKey = NodeMasterPrivKey.NodeMasterPrivKey(ExtKey())
                     let purpose = ConnectionPurpose.Routing
                     PeerNode.Connect throwawayPrivKey nodeIdentifier currency Money.Zero purpose
+                
+                // step 1: send query_channel_range, read all replies and collect short channel ids from them
                 let! initialNode = 
                     match initialNode with
                     | Ok(node) -> node.SendMsg queryMsg
@@ -112,6 +114,9 @@ module Routing =
                 let batches = shortChannelIds |> Seq.chunkBySize batchSize |> Collections.Generic.Queue
                 let results = ResizeArray<IRoutingMsg>()
 
+                // step 2: split shortChannelIds into batches and for each batch:
+                // - send query_short_channel_ids
+                // - receive routing messages and add them to result until we get reply_short_channel_ids_end
                 let rec processMessages (node: PeerNode) : Async<PeerNode> =
                     async {
                         let! response = node.MsgStream.RecvMsg()
