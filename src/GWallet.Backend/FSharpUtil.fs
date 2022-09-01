@@ -171,6 +171,26 @@ module FSharpUtil =
                 return aJobResult,bJobResult,cJobResult
             }
 
+        let MixedParallel4 (a: Async<'T1>) (b: Async<'T2>) (c: Async<'T3>) (d: Async<'T4>): Async<'T1*'T2*'T3*'T4> =
+            async {
+                let aJob = Async.StartChild a
+                let bJob = Async.StartChild b
+                let cJob = Async.StartChild c
+                let dJob = Async.StartChild d
+
+                let! aStartedJob = aJob
+                let! bStartedJob = bJob
+                let! cStartedJob = cJob
+                let! dStartedJob = dJob
+
+                let! aJobResult = aStartedJob
+                let! bJobResult = bStartedJob
+                let! cJobResult = cStartedJob
+                let! dJobResult = dStartedJob
+
+                return aJobResult,bJobResult,cJobResult,dJobResult
+            }
+
         // efficient raise
         let private RaiseResult (e: ResultWrapper<'T>) =
             Async.FromContinuations(fun (_, econt, _) -> econt e)
