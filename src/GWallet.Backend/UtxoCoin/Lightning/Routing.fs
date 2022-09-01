@@ -54,7 +54,6 @@ type private ChannelUpdates =
 
 type internal RoutingState(graph: RoutingGraph) =
     let mutable graph = graph
-    let allAnnouncementMessages = Collections.Generic.HashSet<UnsignedChannelAnnouncementMsg>()
 
     member val IsUpdating = false with get, set
 
@@ -90,8 +89,6 @@ type internal RoutingState(graph: RoutingGraph) =
         
         announcements.RemoveWhere(fun ann -> not(updates.ContainsKey ann.ShortChannelId)) |> ignore
         
-        allAnnouncementMessages.UnionWith announcements
-        
         let tempGraph = QuikGraph.AdjacencyGraph<NodeId, RoutingGraphEdge>()
         tempGraph.AddVerticesAndEdgeRange(graph.Edges) |> ignore
 
@@ -116,12 +113,11 @@ type internal RoutingState(graph: RoutingGraph) =
         failwith "not implemented"
 
     member self.DumpGossipMessages(stream: DotNetLightning.Serialization.LightningWriterStream) =
-        failwith "not implemented"
-        // we will not know types of messages when deserializing
-        for annMsg in allAnnouncementMessages do
-            (annMsg :> ILightningSerializable<_>).Serialize stream
-        for { Update=upd } in graph.Edges do
-            (upd :> ILightningSerializable<_>).Serialize stream
+        stream.Write(graph.EdgeCount, false)
+        for edge in graph.Edges do
+            stream.Write(edge.Source.Value)
+            stream.Write(edge.Target.Value)
+            (edge.Update :> ILightningSerializable<_>).Serialize stream
 
 
 module internal Routing =
@@ -247,17 +243,17 @@ module internal Routing =
             if not routingState.IsUpdating then
                 routingState.IsUpdating <- true
                 try
-                    let cacheDir = Config.GetCacheDir()
-                    let cacheFile = FileInfo(Path.Combine(cacheDir.FullName, "routingGraph.bin"))
-                    if cacheFile.Exists then
-                        use stream = cacheFile.Open(FileMode.Open)
-                        routingState.Deserialize(stream)
+                    //let cacheDir = Config.GetCacheDir()
+                    //let cacheFile = FileInfo(Path.Combine(cacheDir.FullName, "routingGraph.bin"))
+                    //if cacheFile.Exists then
+                    //    use stream = cacheFile.Open(FileMode.Open)
+                    //    routingState.Deserialize(stream)
                     
                     let! gossipMessages = QueryRoutingGossip currency nodeId
                     routingState.ProcessGossipMessages gossipMessages
 
-                    use stream = cacheFile.Open(FileMode.Create)
-                    routingState.Serialize(stream)
+                    //use stream = cacheFile.Open(FileMode.Create)
+                    //routingState.Serialize(stream)
                 finally
                     routingState.IsUpdating <- false
         }
