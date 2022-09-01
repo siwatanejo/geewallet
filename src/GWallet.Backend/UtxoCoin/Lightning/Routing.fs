@@ -15,7 +15,7 @@ open QuikGraph
 
 
 
-type RoutingGrpahEdge = 
+type internal RoutingGrpahEdge =
     {
         Source : NodeId
         Target : NodeId
@@ -28,7 +28,8 @@ type RoutingGrpahEdge =
 
         member self.ShortChannelId = self.Update.ShortChannelId
 
-type RoutingGraph = QuikGraph.ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
+type internal RoutingGraph =
+    QuikGraph.ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
 
 
 type private ChannelUpdates =
@@ -51,7 +52,7 @@ type private ChannelUpdates =
                 | _ -> { self with Backward = Some(update) }
 
 
-type RoutingState(graph: RoutingGraph) =
+type internal RoutingState(graph: RoutingGraph) =
     let mutable graph = graph
     let allAnnouncementMessages = Collections.Generic.HashSet<UnsignedChannelAnnouncementMsg>()
 
@@ -123,7 +124,7 @@ type RoutingState(graph: RoutingGraph) =
             (upd :> ILightningSerializable<_>).Serialize stream
 
 
-module Routing =
+module internal Routing =
     exception RoutingQueryException of string
 
     let routingState = RoutingState.Empty
