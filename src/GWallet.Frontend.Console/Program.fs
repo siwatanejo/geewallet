@@ -530,6 +530,8 @@ let UpdateServersStats () =
 
 [<EntryPoint>]
 let main argv =
+    GWallet.Backend.UtxoCoin.Lightning.RapidGossipSyncer.Sync() |> Async.RunSynchronously
+    
     match argv.Length with
     | 0 ->
         NormalStartWithNoParameters()

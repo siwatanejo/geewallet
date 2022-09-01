@@ -7,14 +7,17 @@ open System.Linq
 open Newtonsoft.Json
 open NBitcoin
 open DotNetLightning.Serialization
+open DotNetLightning.Serialization.Msgs
 open DotNetLightning.Utils
 open ResultUtils.Portability
+
+type MutableList<'T> = System.Collections.Generic.List<'T>
 
 module RapidGossipSyncer =
     
     let private RGSPrefix = [| 76uy; 68uy; 75uy; 1uy |]
 
-    type CompactAnnouncment =
+    type internal CompactAnnouncment =
         {
             ChannelFeatures: Result<FeatureBits, FeatureError>
             ShortChannelId: ShortChannelId
@@ -22,7 +25,7 @@ module RapidGossipSyncer =
             NodeId2: NodeId
         }
 
-    type CompactChannelUpdate =
+    type internal CompactChannelUpdate =
         {
             ShortChannelId: ShortChannelId
             CLTVExpiryDelta: uint16
@@ -35,6 +38,7 @@ module RapidGossipSyncer =
     let Sync () =
         async {
             use httpClient = new HttpClient()
+            // Always do a full sync
             let! gossipData =
                 httpClient.GetByteArrayAsync("https://rapidsync.lightningdevkit.org/snapshot/0")
                 |> Async.AwaitTask
@@ -44,7 +48,7 @@ module RapidGossipSyncer =
 
             let prefix = Array.zeroCreate RGSPrefix.Length
             
-            do! lightningReader.ReadAsync(prefix, 0, RGSPrefix.Length)
+            do! lightningReader.ReadAsync(prefix, 0, prefix.Length)
                 |> Async.AwaitTask
                 |> Async.Ignore
 
@@ -55,7 +59,8 @@ module RapidGossipSyncer =
             if chainHash <> Network.Main.GenesisHash then
                 failwith "Invalid chain hash"
 
-            let _lastSeenTimestamp = lightningReader.ReadUInt32 false
+            let lastSeenTimestamp = lightningReader.ReadUInt32 false
+            let backdatedTimestamp = lastSeenTimestamp - uint (24 * 3600 * 7)
 
             let rec readNodeIds (remainingCount: uint) (state: list<NodeId>) =
                 if remainingCount = 0u then
@@ -66,9 +71,12 @@ module RapidGossipSyncer =
 
             let nodeIds = readNodeIds (lightningReader.ReadUInt32 false) List.empty
 
-            let rec readAnnouncements (remainingCount: uint) (previousShortChannelId: uint64) (state: list<CompactAnnouncment>) =
+            let announcementsCount = lightningReader.ReadUInt32 false
+            let announcements = MutableList<CompactAnnouncment>(int announcementsCount)
+
+            let rec readAnnouncements (remainingCount: uint) (previousShortChannelId: uint64) =
                 if remainingCount = 0u then
-                    state
+                    ()
                 else
                     let features = lightningReader.ReadWithLen () |> FeatureBits.TryCreate
                     let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
@@ -83,9 +91,10 @@ module RapidGossipSyncer =
                             NodeId2 = nodeId2
                         }
 
-                    readAnnouncements (remainingCount-1u) shortChannelId (state @ [ compactAnn ])
+                    announcements.Add compactAnn
+                    readAnnouncements (remainingCount-1u) shortChannelId
 
-            let announcements = readAnnouncements (lightningReader.ReadUInt32 false) 0UL List.empty
+            readAnnouncements announcementsCount 0UL
 
             let updatesCount = lightningReader.ReadUInt32 false
 
@@ -95,13 +104,16 @@ module RapidGossipSyncer =
             let defaultFeeProportionalMillionths: uint32 = lightningReader.ReadUInt32 false
             let defaultHtlcMaximumMSat: uint64 = lightningReader.ReadUInt64 false
 
-            let rec readUpdates (remainingCount: uint) (previousShortChannelId: uint64) (state: list<CompactChannelUpdate>) =
+            let updates = MutableList(int updatesCount)
+
+            let rec readUpdates (remainingCount: uint) (previousShortChannelId: uint64) =
                 if remainingCount = 0u then
-                    state
+                    ()
                 else
                     let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
                     let customChannelFlag = lightningReader.ReadByte()
-                    
+                    let standardChannelFlag = customChannelFlag &&& 0b0000_0011uy
+
                     if customChannelFlag &&& 0b1000_0000uy > 0uy then
                         failwith "We don't support increamental updates yet!"        
 
@@ -135,30 +147,24 @@ module RapidGossipSyncer =
                         else
                             defaultHtlcMaximumMSat
 
-                    let compactUpdate =
+                    let channelUpdate =
                         {
-                            ShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
-                            CLTVExpiryDelta = cltvExpiryDelta
-                            HtlcMinimumMSat = htlcMinimumMSat
-                            FeeBaseMSat = feeBaseMSat
-                            FeeProportionalMillionths = feeProportionalMillionths
-                            HtlcMaximumMSat = htlcMaximumMSat
+                            UnsignedChannelUpdateMsg.ShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
+                            Timestamp = backdatedTimestamp
+                            ChainHash = Network.Main.GenesisHash
+                            ChannelFlags = standardChannelFlag
+                            MessageFlags = 0uy
+                            CLTVExpiryDelta = cltvExpiryDelta |> BlockHeightOffset16
+                            HTLCMinimumMSat = htlcMinimumMSat |> LNMoney.MilliSatoshis
+                            FeeBaseMSat = feeBaseMSat |> LNMoney.MilliSatoshis
+                            FeeProportionalMillionths = feeProportionalMillionths 
+                            HTLCMaximumMSat = htlcMaximumMSat |> LNMoney.MilliSatoshis |> Some
                         }
 
-                    readUpdates (remainingCount-1u) shortChannelId (state @ [ compactUpdate ])
+                    updates.Add channelUpdate
+                    readUpdates (remainingCount-1u) shortChannelId
 
-            let updates =
-                readUpdates updatesCount 0UL List.empty
-
-            File.WriteAllText ("announcements.json",
-                JsonConvert.SerializeObject(announcements, JsonMarshalling.SerializerSettings)
-            )
-            File.WriteAllText ("nodeIds.json",
-                JsonConvert.SerializeObject(nodeIds, JsonMarshalling.SerializerSettings)
-            )
-            File.WriteAllText ("updates.json",
-                JsonConvert.SerializeObject(updates, JsonMarshalling.SerializerSettings)
-            )
+            readUpdates updatesCount 0UL
 
             return ()
         }
