@@ -15,7 +15,7 @@ open QuikGraph
 
 
 
-type internal RoutingGrpahEdge =
+type internal RoutingGraphEdge =
     {
         Source : NodeId
         Target : NodeId
@@ -29,7 +29,7 @@ type internal RoutingGrpahEdge =
         member self.ShortChannelId = self.Update.ShortChannelId
 
 type internal RoutingGraph =
-    QuikGraph.ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
+    QuikGraph.ArrayAdjacencyGraph<NodeId, RoutingGraphEdge>
 
 
 type private ChannelUpdates =
@@ -92,7 +92,7 @@ type internal RoutingState(graph: RoutingGraph) =
         
         allAnnouncementMessages.UnionWith announcements
         
-        let tempGraph = QuikGraph.AdjacencyGraph<NodeId, RoutingGrpahEdge>()
+        let tempGraph = QuikGraph.AdjacencyGraph<NodeId, RoutingGraphEdge>()
         tempGraph.AddVerticesAndEdgeRange(graph.Edges) |> ignore
 
         for ann in announcements do

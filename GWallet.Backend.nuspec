@@ -24,6 +24,7 @@
       <dependency id="Newtonsoft.Json" version="12.0.2" />
       <dependency id="NOnion" version="0.1.0--date20220201-0818.git-4a224d8" />
       <dependency id="Portable.BouncyCastle" version="1.8.10" />
+      <dependency id="QuikGraph" version="2.5.0" />
       <dependency id="SharpRaven" version="2.4.0" />
       <dependency id="StreamJsonRpc" version="2.8.21" />
       <dependency id="System.Buffers" version="4.5.1" />
@@ -55,7 +56,6 @@
       <dependency id="System.Threading" version="4.3.0" />
       <dependency id="System.Threading.Tasks.Extensions" version="4.5.4" />
       <dependency id="Xamarin.Essentials" version="1.0.0" />
-	  <dependency id="QuikGraph" Version="2.5.0" />
     </dependencies>
   </metadata>
   <files>
