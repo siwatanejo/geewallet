@@ -40,7 +40,7 @@ module RapidGossipSyncer =
             use httpClient = new HttpClient()
             // Always do a full sync
             let! gossipData =
-                httpClient.GetByteArrayAsync("https://rapidsync.lightningdevkit.org/snapshot/0")
+                httpClient.GetByteArrayAsync "https://rapidsync.lightningdevkit.org/snapshot/0"
                 |> Async.AwaitTask
 
             use memStream = new MemoryStream(gossipData)
@@ -67,16 +67,15 @@ module RapidGossipSyncer =
                     state
                 else
                     let nodeId = lightningReader.ReadPubKey() |> NodeId
-                    readNodeIds (remainingCount-1u) (state @ [ nodeId ])
+                    readNodeIds (remainingCount - 1u) (state @ List.singleton nodeId)
 
-            let nodeIds = readNodeIds (lightningReader.ReadUInt32 false) List.empty
+            let nodeIds = readNodeIds (lightningReader.ReadUInt32 false) List.Empty
 
             let announcementsCount = lightningReader.ReadUInt32 false
-            let announcements = MutableList<CompactAnnouncment>(int announcementsCount)
 
-            let rec readAnnouncements (remainingCount: uint) (previousShortChannelId: uint64) =
+            let rec readAnnouncements (remainingCount: uint) (previousShortChannelId: uint64) (announcements: List<CompactAnnouncment>) =
                 if remainingCount = 0u then
-                    ()
+                    announcements
                 else
                     let features = lightningReader.ReadWithLen () |> FeatureBits.TryCreate
                     let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
@@ -91,24 +90,21 @@ module RapidGossipSyncer =
                             NodeId2 = nodeId2
                         }
 
-                    announcements.Add compactAnn
-                    readAnnouncements (remainingCount-1u) shortChannelId
+                    readAnnouncements (remainingCount - 1u) shortChannelId (compactAnn::announcements)
 
-            readAnnouncements announcementsCount 0UL
+            let announcements = readAnnouncements announcementsCount 0UL List.Empty
 
             let updatesCount = lightningReader.ReadUInt32 false
 
-            let defaultCLTVExpiryDelta: uint16 = lightningReader.ReadUInt16 false
+            let defaultCltvExpiryDelta: uint16 = lightningReader.ReadUInt16 false
             let defaultHtlcMinimumMSat: uint64 = lightningReader.ReadUInt64 false
             let defaultFeeBaseMSat: uint32 = lightningReader.ReadUInt32 false
             let defaultFeeProportionalMillionths: uint32 = lightningReader.ReadUInt32 false
             let defaultHtlcMaximumMSat: uint64 = lightningReader.ReadUInt64 false
 
-            let updates = MutableList(int updatesCount)
-
-            let rec readUpdates (remainingCount: uint) (previousShortChannelId: uint64) =
+            let rec readUpdates (remainingCount: uint) (previousShortChannelId: uint64) (updates: List<UnsignedChannelUpdateMsg>) =
                 if remainingCount = 0u then
-                    ()
+                    updates
                 else
                     let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
                     let customChannelFlag = lightningReader.ReadByte()
@@ -121,7 +117,7 @@ module RapidGossipSyncer =
                         if customChannelFlag &&& 0b0100_0000uy > 0uy then
                             lightningReader.ReadUInt16 false
                         else
-                            defaultCLTVExpiryDelta
+                            defaultCltvExpiryDelta
 
                     let htlcMinimumMSat =
                         if customChannelFlag &&& 0b0010_0000uy > 0uy then
@@ -161,10 +157,9 @@ module RapidGossipSyncer =
                             HTLCMaximumMSat = htlcMaximumMSat |> LNMoney.MilliSatoshis |> Some
                         }
 
-                    updates.Add channelUpdate
-                    readUpdates (remainingCount-1u) shortChannelId
+                    readUpdates (remainingCount - 1u) shortChannelId (channelUpdate::updates)
 
-            readUpdates updatesCount 0UL
+            let updates = readUpdates updatesCount 0UL List.Empty
 
             return ()
         }
