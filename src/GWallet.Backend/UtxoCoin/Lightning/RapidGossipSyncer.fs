@@ -92,37 +92,33 @@ module RapidGossipSyncer =
             let lastSeenTimestamp = lightningReader.ReadUInt32 false
             let backdatedTimestamp = lastSeenTimestamp - uint (24 * 3600 * 7)
 
-            let rec readNodeIds (remainingCount: uint) (state: list<NodeId>) =
-                if remainingCount = 0u then
-                    state
-                else
-                    let nodeId = lightningReader.ReadPubKey() |> NodeId
-                    readNodeIds (remainingCount - 1u) (state @ List.singleton nodeId)
-
-            let nodeIds = readNodeIds (lightningReader.ReadUInt32 false) List.Empty
+            let nodeIdsCount = lightningReader.ReadUInt32 false
+            let nodeIds = 
+                Array.init
+                    (int nodeIdsCount)
+                    (fun _ -> lightningReader.ReadPubKey() |> NodeId)
 
             let announcementsCount = lightningReader.ReadUInt32 false
 
-            let rec readAnnouncements (remainingCount: uint) (previousShortChannelId: uint64) (announcements: List<CompactAnnouncment>) =
-                if remainingCount = 0u then
-                    announcements
-                else
-                    let features = lightningReader.ReadWithLen () |> FeatureBits.TryCreate
-                    let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
-                    let nodeId1 = nodeIds.[lightningReader.ReadBigSize () |> int]
-                    let nodeId2 = nodeIds.[lightningReader.ReadBigSize () |> int]
+            let announcements = 
+                [|
+                    let mutable previousShortChannelId = 0UL
+                    for _=1 to int announcementsCount do
+                        let features = lightningReader.ReadWithLen () |> FeatureBits.TryCreate
+                        let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
+                        let nodeId1 = nodeIds.[lightningReader.ReadBigSize () |> int]
+                        let nodeId2 = nodeIds.[lightningReader.ReadBigSize () |> int]
 
-                    let compactAnn =
-                        {
-                            ChannelFeatures = features
-                            ShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
-                            NodeId1 = nodeId1
-                            NodeId2 = nodeId2
-                        }
-
-                    readAnnouncements (remainingCount - 1u) shortChannelId (compactAnn::announcements)
-
-            let announcements = readAnnouncements announcementsCount 0UL List.Empty
+                        let compactAnn =
+                            {
+                                ChannelFeatures = features
+                                ShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
+                                NodeId1 = nodeId1
+                                NodeId2 = nodeId2
+                            }
+                        yield compactAnn
+                        previousShortChannelId <- shortChannelId
+                |]
 
             let updatesCount = lightningReader.ReadUInt32 false
 
