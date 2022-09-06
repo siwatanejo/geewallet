@@ -35,6 +35,17 @@ module RapidGossipSyncer =
             HtlcMaximumMSat: uint64
         }
 
+    /// see https://github.com/lightningdevkit/rust-lightning/tree/main/lightning-rapid-gossip-sync/#custom-channel-update
+    module CustomChannelUpdateFlags =
+        let direction = 1uy
+        let disableCHannel = 2uy
+        let htlcMaximumMsat = 4uy
+        let feeProportionalMillionths = 8uy
+        let feeBaseMsat = 16uy
+        let htlcMinimumMsat = 32uy
+        let cltvExpiryDelta = 64uy
+        let incrementalUpdate = 128uy
+
     let Sync () =
         async {
             use httpClient = new HttpClient()
@@ -108,37 +119,38 @@ module RapidGossipSyncer =
                 else
                     let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
                     let customChannelFlag = lightningReader.ReadByte()
-                    let standardChannelFlag = customChannelFlag &&& 0b0000_0011uy
+                    let standardChannelFlagMask = 0b0000_0011uy
+                    let standardChannelFlag = customChannelFlag &&& standardChannelFlagMask
 
-                    if customChannelFlag &&& 0b1000_0000uy > 0uy then
+                    if customChannelFlag &&& CustomChannelUpdateFlags.incrementalUpdate > 0uy then
                         failwith "We don't support increamental updates yet!"        
 
                     let cltvExpiryDelta =
-                        if customChannelFlag &&& 0b0100_0000uy > 0uy then
+                        if customChannelFlag &&& CustomChannelUpdateFlags.cltvExpiryDelta > 0uy then
                             lightningReader.ReadUInt16 false
                         else
                             defaultCltvExpiryDelta
 
                     let htlcMinimumMSat =
-                        if customChannelFlag &&& 0b0010_0000uy > 0uy then
+                        if customChannelFlag &&& CustomChannelUpdateFlags.htlcMinimumMsat > 0uy then
                             lightningReader.ReadUInt64 false
                         else
                             defaultHtlcMinimumMSat
 
                     let feeBaseMSat =
-                        if customChannelFlag &&& 0b0001_0000uy > 0uy then
+                        if customChannelFlag &&& CustomChannelUpdateFlags.feeBaseMsat > 0uy then
                             lightningReader.ReadUInt32 false
                         else
                             defaultFeeBaseMSat
 
                     let feeProportionalMillionths =
-                        if customChannelFlag &&& 0b0000_1000uy > 0uy then
+                        if customChannelFlag &&& CustomChannelUpdateFlags.feeProportionalMillionths > 0uy then
                             lightningReader.ReadUInt32 false
                         else
                             defaultFeeProportionalMillionths
                     
                     let htlcMaximumMSat =
-                        if customChannelFlag &&& 0b0000_0100uy > 0uy then
+                        if customChannelFlag &&& CustomChannelUpdateFlags.htlcMaximumMsat > 0uy then
                             lightningReader.ReadUInt64 false
                         else
                             defaultHtlcMaximumMSat
