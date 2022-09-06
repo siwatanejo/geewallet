@@ -473,6 +473,9 @@ let rec ProgramMainLoop() =
     LayerTwo.HandleReadyToRecoverDelayedHtlcs activeAccounts
     |> Async.RunSynchronously
 
+    let gossipSyncJob = GWallet.Backend.UtxoCoin.Lightning.RapidGossipSyncer.Sync() 
+    gossipSyncJob |> Async.RunSynchronously
+
     //Rerun unresolved check
     unresolvedHtlcsCheckJob |> Async.RunSynchronously |> ignore<array<bool>>
 
@@ -530,8 +533,6 @@ let UpdateServersStats () =
 
 [<EntryPoint>]
 let main argv =
-    GWallet.Backend.UtxoCoin.Lightning.RapidGossipSyncer.Sync() |> Async.RunSynchronously
-    
     match argv.Length with
     | 0 ->
         NormalStartWithNoParameters()
