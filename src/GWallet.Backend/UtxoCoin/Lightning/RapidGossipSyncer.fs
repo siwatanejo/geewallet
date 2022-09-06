@@ -35,6 +35,25 @@ module RapidGossipSyncer =
             HtlcMaximumMSat: uint64
         }
 
+    type private ChannelUpdates =
+        {
+            Forward: UnsignedChannelUpdateMsg option
+            Backward: UnsignedChannelUpdateMsg option
+        }
+        with
+            static member Empty = { Forward = None; Backward = None }
+    
+            member self.With(update: UnsignedChannelUpdateMsg) =
+                let isForward = (update.ChannelFlags &&& 1uy) = 0uy
+                if isForward then
+                    match self.Forward with
+                    | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
+                    | _ -> { self with Forward = Some(update) }
+                else
+                    match self.Backward with
+                    | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
+                    | _ -> { self with Backward = Some(update) }
+
     /// see https://github.com/lightningdevkit/rust-lightning/tree/main/lightning-rapid-gossip-sync/#custom-channel-update
     module CustomChannelUpdateFlags =
         let direction = 1uy
@@ -113,7 +132,7 @@ module RapidGossipSyncer =
             let defaultFeeProportionalMillionths: uint32 = lightningReader.ReadUInt32 false
             let defaultHtlcMaximumMSat: uint64 = lightningReader.ReadUInt64 false
 
-            let rec readUpdates (remainingCount: uint) (previousShortChannelId: uint64) (updates: List<UnsignedChannelUpdateMsg>) =
+            let rec readUpdates (remainingCount: uint) (previousShortChannelId: uint64) (updates: Map<ShortChannelId, ChannelUpdates>) =
                 if remainingCount = 0u then
                     updates
                 else
@@ -155,9 +174,11 @@ module RapidGossipSyncer =
                         else
                             defaultHtlcMaximumMSat
 
+                    let structuredShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
+
                     let channelUpdate =
                         {
-                            UnsignedChannelUpdateMsg.ShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
+                            UnsignedChannelUpdateMsg.ShortChannelId = structuredShortChannelId
                             Timestamp = backdatedTimestamp
                             ChainHash = Network.Main.GenesisHash
                             ChannelFlags = standardChannelFlag
@@ -169,9 +190,16 @@ module RapidGossipSyncer =
                             HTLCMaximumMSat = htlcMaximumMSat |> LNMoney.MilliSatoshis |> Some
                         }
 
-                    readUpdates (remainingCount - 1u) shortChannelId (channelUpdate::updates)
+                    let newUpdates =
+                        let oldValue =
+                            match updates |> Map.tryFind structuredShortChannelId with
+                            | Some(updates) -> updates
+                            | None -> ChannelUpdates.Empty
+                        updates |> Map.add structuredShortChannelId (oldValue.With channelUpdate)
 
-            let updates = readUpdates updatesCount 0UL List.Empty
+                    readUpdates (remainingCount - 1u) shortChannelId newUpdates
+
+            let updates = readUpdates updatesCount 0UL Map.empty
 
             return ()
         }
