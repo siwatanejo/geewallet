@@ -196,6 +196,8 @@ module RapidGossipSyncer =
 
             let updates = readUpdates updatesCount 0UL Map.empty
 
+            let _ = updates, announcements
+
             return ()
         }
 
