@@ -9,6 +9,23 @@ open DotNetLightning.Serialization
 open DotNetLightning.Serialization.Msgs
 open DotNetLightning.Utils
 open ResultUtils.Portability
+open GWallet.Backend.FSharpUtil.UwpHacks
+open QuikGraph
+
+
+type internal RoutingGrpahEdge = 
+    {
+        Source : NodeId
+        Target : NodeId
+        ShortChannelId : ShortChannelId
+        Update: UnsignedChannelUpdateMsg
+    }
+    with
+        interface IEdge<NodeId> with
+            member this.Source = this.Source
+            member this.Target = this.Target
+
+type internal RoutingGraph = ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
 
 
 module RapidGossipSyncer =
@@ -63,12 +80,17 @@ module RapidGossipSyncer =
         let CltvExpiryDelta = 64uy
         let IncrementalUpdate = 128uy
 
+    let mutable private routingGraph: RoutingGraph = RoutingGraph(AdjacencyGraph())
+    let mutable private lastSyncTimestamp = 0u
+
     let Sync () =
         async {
             use httpClient = new HttpClient()
-            // Always do a full sync
+
+            let currentTimestamp = (System.DateTime.UtcNow - System.DateTime(1970, 1, 1)).TotalSeconds |> uint32
             let! gossipData =
-                httpClient.GetByteArrayAsync "https://rapidsync.lightningdevkit.org/snapshot/0"
+                let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" lastSyncTimestamp
+                httpClient.GetByteArrayAsync url
                 |> Async.AwaitTask
 
             use memStream = new MemoryStream(gossipData)
@@ -196,7 +218,21 @@ module RapidGossipSyncer =
 
             let updates = readUpdates updatesCount 0UL Map.empty
 
-            let _ = updates, announcements
+            let baseGraph = AdjacencyGraph<NodeId, RoutingGrpahEdge>()
+            baseGraph.AddVerticesAndEdgeRange(routingGraph.Edges) |> ignore
+
+            for ann in announcements do
+                let updates = updates.[ann.ShortChannelId]
+                
+                let addEdge source traget (upd : UnsignedChannelUpdateMsg) =
+                    let edge = { Source=source; Target=traget; ShortChannelId=upd.ShortChannelId; Update=upd }
+                    baseGraph.AddVerticesAndEdge edge |> ignore
+                
+                updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
+                updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
+
+            routingGraph <- RoutingGraph(baseGraph)
+            lastSyncTimestamp <- currentTimestamp // doesn't work - I get 404 from RGS server
 
             return ()
         }
