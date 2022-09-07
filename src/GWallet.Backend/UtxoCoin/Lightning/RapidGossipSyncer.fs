@@ -210,25 +210,26 @@ module RapidGossipSyncer =
 
             let announcementsCount = lightningReader.ReadUInt32 false
 
-            let announcements = 
-                [|
-                    let mutable previousShortChannelId = 0UL
-                    for _=1 to int announcementsCount do
-                        let features = lightningReader.ReadWithLen () |> FeatureBits.TryCreate
-                        let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
-                        let nodeId1 = nodeIds.[lightningReader.ReadBigSize () |> int]
-                        let nodeId2 = nodeIds.[lightningReader.ReadBigSize () |> int]
+            let rec readAnnouncements (remainingCount: uint) (previousShortChannelId: uint64) (announcements: List<CompactAnnouncment>) =
+                if remainingCount = 0u then
+                    announcements
+                else
+                    let features = lightningReader.ReadWithLen () |> FeatureBits.TryCreate
+                    let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
+                    let nodeId1 = nodeIds.[lightningReader.ReadBigSize () |> int]
+                    let nodeId2 = nodeIds.[lightningReader.ReadBigSize () |> int]
 
-                        let compactAnn =
-                            {
-                                ChannelFeatures = features
-                                ShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
-                                NodeId1 = nodeId1
-                                NodeId2 = nodeId2
-                            }
-                        yield compactAnn
-                        previousShortChannelId <- shortChannelId
-                |]
+                    let compactAnn =
+                        {
+                            ChannelFeatures = features
+                            ShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
+                            NodeId1 = nodeId1
+                            NodeId2 = nodeId2
+                        }
+
+                    readAnnouncements (remainingCount - 1u) shortChannelId (compactAnn::announcements)
+
+            let announcements = readAnnouncements announcementsCount 0UL List.Empty
 
             let updatesCount = lightningReader.ReadUInt32 false
 
@@ -307,10 +308,12 @@ module RapidGossipSyncer =
 
             let updates = readUpdates updatesCount 0UL Map.empty
 
-            let gossipData = { Announcements = announcements; Updates = updates }
+            let gossipData = { Announcements = announcements |> List.toArray; Updates = updates }
 
             // serialization roundtrip test
             use ms = new System.IO.MemoryStream()
+            gossipData.Serialize ms
+            ms.Close()
             use rs = new System.IO.MemoryStream(ms.ToArray())
             let deserializedData = GossipData.Deserialize rs
             assert(gossipData = deserializedData)
