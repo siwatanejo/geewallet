@@ -477,6 +477,11 @@ let rec ProgramMainLoop() =
     //Rerun unresolved check
     unresolvedHtlcsCheckJob |> Async.RunSynchronously |> ignore<array<bool>>
 
+    // routing test
+    UtxoCoin.Lightning.RapidGossipSyncer.GetRoute 
+        (activeAccounts.OfType<UtxoCoin.NormalUtxoAccount>())
+        "033d8656219478701227199cbd6f670335c8d408a92ae88b962c49d4dc0e83e025@34.65.85.39:9735"
+
     Console.WriteLine ()
     Console.WriteLine "*** STATUS ***"
     Console.WriteLine(String.concat Environment.NewLine accountStatusesLines)

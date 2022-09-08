@@ -9,8 +9,10 @@ open DotNetLightning.Serialization
 open DotNetLightning.Serialization.Msgs
 open DotNetLightning.Utils
 open ResultUtils.Portability
+open GWallet.Backend
 open GWallet.Backend.FSharpUtil.UwpHacks
 open QuikGraph
+open QuikGraph.Algorithms
 
 
 type internal RoutingGrpahEdge = 
@@ -26,6 +28,40 @@ type internal RoutingGrpahEdge =
             member this.Target = this.Target
 
 type internal RoutingGraph = ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
+
+
+module private EdgeWeightCaluculation =
+    // code is partly from DotNetLightning
+
+    let nodeFee (baseFee: LNMoney, proportionalFee: int64, paymentAmount: LNMoney) =
+        baseFee + ((paymentAmount * proportionalFee) / 1000000L)
+        
+    /// This forces channel_update(s) with fees = 0 to have a minimum of 1msat for the baseFee. Note that
+    /// the update is not being modified and the result of the route computation will still have the update
+    /// with fees=0 which is what will be used to build the onion.
+    let edgeFeeCost (amountWithFees: LNMoney) (edge: RoutingGrpahEdge) =
+        let ({ Update = update }) = edge
+        let hasZeroFee = update.FeeBaseMSat = LNMoney.Zero && update.FeeProportionalMillionths = 0u
+
+        if hasZeroFee then
+            nodeFee(LNMoney.One, 0L, amountWithFees)
+        else
+            amountWithFees
+            + nodeFee(
+                update.FeeBaseMSat,
+                (int64 update.FeeProportionalMillionths),
+                amountWithFees
+            )
+
+    // factors?
+    let feeFactor = 1.0
+    let expiryDeltaFactor = 1.0
+
+    /// Computes the weight for the given edge
+    let edgeWeight (paymentAmount: LNMoney) (edge: RoutingGrpahEdge) : float =
+        let feeCost = edgeFeeCost paymentAmount edge
+        let expiryDelta = edge.Update.CLTVExpiryDelta
+        float(feeCost.Value) * feeFactor / (float(expiryDelta.Value) * expiryDeltaFactor)
 
 
 module RapidGossipSyncer =
@@ -270,4 +306,29 @@ module RapidGossipSyncer =
 
             return ()
         }
+    
+    let GetRoute (accounts: seq<UtxoCoin.NormalUtxoAccount>) (nodeAddress: string) =
+        let targetNodeId = NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC nodeAddress).NodeId
+        
+        let nodeIds = 
+            seq {
+                for account in accounts do
+                    let channelStore = ChannelStore account
+                    for channelId in channelStore.ListChannelIds() do
+                        let serializedChannel = channelStore.LoadChannel channelId
+                        yield serializedChannel.SavedChannelState.StaticChannelConfig.RemoteNodeId
+            }
+        
+        let paymentAmount = LNMoney(1000) // pass as a parameter?
 
+        let result = 
+            match nodeIds |> Seq.tryHead with
+            | Some(ourNodeId) ->
+                let tryGetPath = 
+                    routingState.Graph.ShortestPathsDijkstra(EdgeWeightCaluculation.edgeWeight paymentAmount, ourNodeId)
+                match tryGetPath.Invoke targetNodeId with
+                | true, path -> path
+                | false, _ -> Seq.empty      
+            | None -> Seq.empty
+        
+        ignore result // Can't return result now because it depends on DNL types
