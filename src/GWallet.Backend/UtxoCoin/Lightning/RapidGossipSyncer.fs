@@ -69,6 +69,15 @@ module RapidGossipSyncer =
                     | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
                     | _ -> { self with Backward = Some(update) }
 
+            member self.Combine(other: ChannelUpdates) =
+                let combine upd1opt upd2opt : UnsignedChannelUpdateMsg option =
+                    match upd1opt, upd2opt with
+                    | None, None -> None
+                    | Some(_), None -> upd1opt
+                    | None, Some(_) -> upd2opt
+                    | Some(upd1), Some(upd2) -> if upd1.Timestamp > upd2.Timestamp then upd1opt else upd2opt
+                { Forward = combine self.Forward other.Forward; Backward = combine self.Backward other.Backward }
+
     /// see https://github.com/lightningdevkit/rust-lightning/tree/main/lightning-rapid-gossip-sync/#custom-channel-update
     module internal CustomChannelUpdateFlags =
         let Direction = 1uy
@@ -79,17 +88,56 @@ module RapidGossipSyncer =
         let HtlcMinimumMsat = 32uy
         let CltvExpiryDelta = 64uy
         let IncrementalUpdate = 128uy
+    
+    /// Class responsible for storing and updating routing graph
+    type internal RoutingState() =
+        let announcements = System.Collections.Generic.HashSet<CompactAnnouncment>()
+        let mutable updates: Map<ShortChannelId, ChannelUpdates> = Map.empty
+        let mutable lastSyncTimestamp = 0u
+        let mutable routingGraph: RoutingGraph = RoutingGraph(AdjacencyGraph())
 
-    let mutable private routingGraph: RoutingGraph = RoutingGraph(AdjacencyGraph())
-    let mutable private lastSyncTimestamp = 0u
+        member self.LastSyncTimestamp = lastSyncTimestamp
+
+        member self.Graph = routingGraph
+
+        member self.Update (newAnnouncements : seq<CompactAnnouncment>) 
+                           (newUpdates: Map<ShortChannelId, ChannelUpdates>) 
+                           (syncTimestamp: uint32) =
+            announcements.UnionWith newAnnouncements
+            
+            if updates.IsEmpty then
+                updates <- newUpdates
+            else
+                newUpdates |> Map.iter (fun channelId newUpd ->
+                    match updates |> Map.tryFind channelId with
+                    | Some(upd) ->
+                        updates <- updates |> Map.add channelId (upd.Combine newUpd)
+                    | None ->
+                        updates <- updates |> Map.add channelId newUpd )
+
+            let baseGraph = AdjacencyGraph<NodeId, RoutingGrpahEdge>()
+
+            for ann in announcements do
+                let updates = updates.[ann.ShortChannelId]
+                
+                let addEdge source traget (upd : UnsignedChannelUpdateMsg) =
+                    let edge = { Source=source; Target=traget; ShortChannelId=upd.ShortChannelId; Update=upd }
+                    baseGraph.AddVerticesAndEdge edge |> ignore
+                
+                updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
+                updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
+
+            routingGraph <- RoutingGraph(baseGraph)
+            lastSyncTimestamp <- syncTimestamp
+
+    let internal routingState = RoutingState()
 
     let Sync () =
         async {
             use httpClient = new HttpClient()
 
-            let currentTimestamp = (System.DateTime.UtcNow - System.DateTime(1970, 1, 1)).TotalSeconds |> uint32
             let! gossipData =
-                let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" lastSyncTimestamp
+                let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" routingState.LastSyncTimestamp
                 httpClient.GetByteArrayAsync url
                 |> Async.AwaitTask
 
@@ -218,21 +266,7 @@ module RapidGossipSyncer =
 
             let updates = readUpdates updatesCount 0UL Map.empty
 
-            let baseGraph = AdjacencyGraph<NodeId, RoutingGrpahEdge>()
-            baseGraph.AddVerticesAndEdgeRange(routingGraph.Edges) |> ignore
-
-            for ann in announcements do
-                let updates = updates.[ann.ShortChannelId]
-                
-                let addEdge source traget (upd : UnsignedChannelUpdateMsg) =
-                    let edge = { Source=source; Target=traget; ShortChannelId=upd.ShortChannelId; Update=upd }
-                    baseGraph.AddVerticesAndEdge edge |> ignore
-                
-                updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
-                updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
-
-            routingGraph <- RoutingGraph(baseGraph)
-            lastSyncTimestamp <- currentTimestamp // doesn't work - I get 404 from RGS server
+            routingState.Update announcements updates lastSeenTimestamp
 
             return ()
         }
