@@ -343,19 +343,18 @@ module RapidGossipSyncer =
             return ()
         }
     
-    let GetRoute (accounts: seq<UtxoCoin.NormalUtxoAccount>) (nodeAddress: string) =
+    let GetRoute (account: UtxoCoin.NormalUtxoAccount) (nodeAddress: string) (numSatoshis: decimal) =
         let targetNodeId = NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC nodeAddress).NodeId
         
         let nodeIds = 
             seq {
-                for account in accounts do
-                    let channelStore = ChannelStore account
-                    for channelId in channelStore.ListChannelIds() do
-                        let serializedChannel = channelStore.LoadChannel channelId
-                        yield serializedChannel.SavedChannelState.StaticChannelConfig.RemoteNodeId
+                let channelStore = ChannelStore account
+                for channelId in channelStore.ListChannelIds() do
+                    let serializedChannel = channelStore.LoadChannel channelId
+                    yield serializedChannel.SavedChannelState.StaticChannelConfig.RemoteNodeId
             }
         
-        let paymentAmount = LNMoney(1000L) // pass as a parameter?
+        let paymentAmount = LNMoney.Satoshis(numSatoshis)
 
         let result = 
             match nodeIds |> Seq.tryHead with
