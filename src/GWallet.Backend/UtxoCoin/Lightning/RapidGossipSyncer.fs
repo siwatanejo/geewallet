@@ -30,35 +30,74 @@ type internal RoutingGrpahEdge =
 type internal RoutingGraph = ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
 
 
+module private RoutingHeuristics =
+    // code moslty from DotNetLightning
+    let BLOCK_TIME_TWO_MONTHS = 8640us |> BlockHeightOffset16
+    let CAPACITY_CHANNEL_LOW = LNMoney.Satoshis(1000L)
+
+    let CAPACITY_CHANNEL_HIGH =
+        DotNetLightning.Channel.ChannelConstants.MAX_FUNDING_SATOSHIS.Satoshi
+        |> LNMoney.Satoshis
+
+    [<Literal>]
+    let CLTV_LOW = 9L
+
+    [<Literal>]
+    let CLTV_HIGH = 2016
+
+    let normalize(v, min, max) : double =
+        if (v <= min) then
+            0.00001
+        else if (v > max) then
+            0.99999
+        else
+            (v - min) / (max - min)
+
+    // factors?
+    let CLTVDeltaFactor = 1.0
+    let CapacityFactor = 1.0
+
+
 module private EdgeWeightCaluculation =
     // code is partly from DotNetLightning
 
-    let nodeFee (baseFee: LNMoney, proportionalFee: int64, paymentAmount: LNMoney) =
-        baseFee + ((paymentAmount * proportionalFee) / 1000000L)
+    let nodeFee (baseFee: LNMoney) (proportionalFee: int64) (paymentAmount: LNMoney) =
+        baseFee + LNMoney.Satoshis(decimal(paymentAmount.Satoshi * proportionalFee) / 1000000.0m)
         
-    /// This forces channel_update(s) with fees = 0 to have a minimum of 1msat for the baseFee
     let edgeFeeCost (amountWithFees: LNMoney) (edge: RoutingGrpahEdge) =
-        let ({ Update = update }) = edge
-        let hasZeroFee = update.FeeBaseMSat = LNMoney.Zero && update.FeeProportionalMillionths = 0u
-
-        if hasZeroFee then
-            nodeFee(LNMoney.One, 0L, amountWithFees)
-        else
-            nodeFee(
-                update.FeeBaseMSat,
-                (int64 update.FeeProportionalMillionths),
+        let { Update = update } = edge
+        let result =
+            nodeFee
+                update.FeeBaseMSat 
+                (int64 update.FeeProportionalMillionths)
                 amountWithFees
-            )
-
-    // factors?
-    let feeFactor = 1.0
-    let expiryDeltaFactor = 1.0
+        // We can't have zero fee cost because it causes weight to be 0 regardless of expiry_delta
+        LNMoney.Max(result, LNMoney.MilliSatoshis(1))
 
     /// Computes the weight for the given edge
     let edgeWeight (paymentAmount: LNMoney) (edge: RoutingGrpahEdge) : float =
-        let feeCost = edgeFeeCost paymentAmount edge
-        let expiryDelta = edge.Update.CLTVExpiryDelta
-        float(feeCost.Value) * feeFactor / (float(expiryDelta.Value) * expiryDeltaFactor)
+        let feeCost = float (edgeFeeCost paymentAmount edge).Value
+        let channelCLTVDelta = edge.Update.CLTVExpiryDelta
+        let edgeMaxCapacity =
+            edge.Update.HTLCMaximumMSat
+            |> Option.defaultValue(RoutingHeuristics.CAPACITY_CHANNEL_LOW)
+        if edgeMaxCapacity < paymentAmount then
+            infinity // chanel capacity is too small, reject edge
+        else
+            let capFactor =
+                1.0 - RoutingHeuristics.normalize(
+                        float edgeMaxCapacity.MilliSatoshi,
+                        float RoutingHeuristics.CAPACITY_CHANNEL_LOW.MilliSatoshi,
+                        float RoutingHeuristics.CAPACITY_CHANNEL_HIGH.MilliSatoshi)
+            let cltvFactor =
+                RoutingHeuristics.normalize(
+                    float channelCLTVDelta.Value,
+                    float RoutingHeuristics.CLTV_LOW,
+                    float RoutingHeuristics.CLTV_HIGH)
+            let factor = 
+                cltvFactor * RoutingHeuristics.CLTVDeltaFactor 
+                + capFactor * RoutingHeuristics.CapacityFactor
+            factor * feeCost
 
 
 module RapidGossipSyncer =
@@ -330,4 +369,8 @@ module RapidGossipSyncer =
                 | false, _ -> Seq.empty      
             | None -> Seq.empty
         
+        System.Console.WriteLine("Shortest route to " + nodeAddress)
+        for edge in result do
+            System.Console.WriteLine(SPrintF1 "%A" edge)
+            System.Console.WriteLine(SPrintF1 "Weight: %d" (EdgeWeightCaluculation.edgeWeight paymentAmount edge))
         ignore result // Can't return result now because it depends on DNL types
