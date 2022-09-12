@@ -36,9 +36,7 @@ module private EdgeWeightCaluculation =
     let nodeFee (baseFee: LNMoney, proportionalFee: int64, paymentAmount: LNMoney) =
         baseFee + ((paymentAmount * proportionalFee) / 1000000L)
         
-    /// This forces channel_update(s) with fees = 0 to have a minimum of 1msat for the baseFee. Note that
-    /// the update is not being modified and the result of the route computation will still have the update
-    /// with fees=0 which is what will be used to build the onion.
+    /// This forces channel_update(s) with fees = 0 to have a minimum of 1msat for the baseFee
     let edgeFeeCost (amountWithFees: LNMoney) (edge: RoutingGrpahEdge) =
         let ({ Update = update }) = edge
         let hasZeroFee = update.FeeBaseMSat = LNMoney.Zero && update.FeeProportionalMillionths = 0u
@@ -46,8 +44,7 @@ module private EdgeWeightCaluculation =
         if hasZeroFee then
             nodeFee(LNMoney.One, 0L, amountWithFees)
         else
-            amountWithFees
-            + nodeFee(
+            nodeFee(
                 update.FeeBaseMSat,
                 (int64 update.FeeProportionalMillionths),
                 amountWithFees
