@@ -319,13 +319,15 @@ module RapidGossipSyncer =
                         yield serializedChannel.SavedChannelState.StaticChannelConfig.RemoteNodeId
             }
         
-        let paymentAmount = LNMoney(1000) // pass as a parameter?
+        let paymentAmount = LNMoney(1000L) // pass as a parameter?
 
         let result = 
             match nodeIds |> Seq.tryHead with
             | Some(ourNodeId) ->
                 let tryGetPath = 
-                    routingState.Graph.ShortestPathsDijkstra(EdgeWeightCaluculation.edgeWeight paymentAmount, ourNodeId)
+                    routingState.Graph.ShortestPathsDijkstra(
+                        System.Func<RoutingGrpahEdge, float>(EdgeWeightCaluculation.edgeWeight paymentAmount), 
+                        ourNodeId)
                 match tryGetPath.Invoke targetNodeId with
                 | true, path -> path
                 | false, _ -> Seq.empty      
