@@ -17,6 +17,15 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 open GWallet.Backend.UtxoCoin
 open GWallet.Backend.UtxoCoin.Lightning.Watcher
 
+type internal Hop =
+    {
+        NodeId: NodeId
+        ShortChannelId: ShortChannelId option
+        PaymentSecret: uint256 option
+        AmountToForward: LNMoney
+        OutgoingCLTV: uint32
+    }
+
 type HtlcSettleFailReason =
     | UnknownPaymentHash
     | IncorrectPaymentAmount
@@ -784,96 +793,161 @@ and internal ActiveChannel =
 
         let associatedData = paymentRequest.PaymentHash.ToBytes()
 
-        if paymentRequest.NodeIdValue.Value <> channel.RemoteNodeId.Value then
-            return Error <| SendHtlcPaymentError.NoMultiHopHtlcSupport
-        else
-            let! currentBlockHeight = async {
-                let! blockHeightResponse =
-                    Server.Query currency
-                        (QuerySettings.Default ServerSelectionMode.Fast)
-                        (ElectrumClient.SubscribeHeaders ())
-                        None
-                return
-                    uint32 blockHeightResponse.Height
-            }
-            let expiryBlockHeight = currentBlockHeight + paymentRequest.MinFinalCLTVExpiryDelta.Value
+        let sourceNode = channel.RemoteNodeId
+        let targetNode = paymentRequest.NodeIdValue
 
-            let tlvs =
-                match paymentRequest.PaymentSecret with
-                | Some paymentSecret ->
-                    [|
-                        HopPayloadTLV.AmountToForward amount
-                        HopPayloadTLV.OutgoingCLTV expiryBlockHeight
-                        HopPayloadTLV.PaymentData
-                            (
-                                PaymentSecret.Create paymentSecret,
-                                amount
-                            )
-                    |]
-                | None ->
-                    [|
-                        HopPayloadTLV.AmountToForward amount
-                        HopPayloadTLV.OutgoingCLTV expiryBlockHeight
-                    |]
+        let! currentBlockHeight = async {
+            let! blockHeightResponse =
+                Server.Query currency
+                    (QuerySettings.Default ServerSelectionMode.Fast)
+                    (ElectrumClient.SubscribeHeaders ())
+                    None
+            return
+                uint32 blockHeightResponse.Height
+        }
 
-            let realm0Data = (TLVPayload tlvs).ToBytes()
-            let onionPacket =
-                Sphinx.PacketAndSecrets.Create
-                    (
-                        sessionKey, 
-                        (List.singleton channel.RemoteNodeId.Value),
-                        (List.singleton realm0Data),
-                        associatedData,
-                        Sphinx.PacketFiller.DeterministicPacketFiller
-                    )
-
-            let channelAndAddHtlcMsgRes =
-                channel.Channel.AddHTLC
-                    {
-                        OperationAddHTLC.Amount = amount
-                        PaymentHash = paymentRequest.PaymentHash
-                        Expiry = BlockHeight expiryBlockHeight
-                        Onion = onionPacket.Packet
-                        Upstream = None
-                        Origin = Origin.Local
-                        CurrentHeight = BlockHeight currentBlockHeight
-                    }
-
-            match channelAndAddHtlcMsgRes with
-            | Error (InvalidUpdateAddHTLC err) ->
-                return Error <| SendHtlcPaymentError.InvalidHtlcPayment (self, err)
-            | Error err -> return failwith <| SPrintF1 "error executing HTLC payment command: %s" err.Message
-            | Ok (channelAfterAddHtlcPayment, addHtlcMsg) ->
-                let! peerNodeAfterAddHtlcSent = peerNode.SendMsg addHtlcMsg
-                let connectedChannelAfterAddHtlcSent =
-                    {
-                        connectedChannel with
-                            PeerNode = peerNodeAfterAddHtlcSent
-                            Channel =
+        let hops = 
+            if sourceNode <> targetNode then // Multihop payment
+                let route = 
+                    UtxoCoin.Lightning.RapidGossipSyncer.GetRoute sourceNode targetNode amount
+                    |> Seq.toArray
+                if Seq.isEmpty route then
+                    failwith "no route" // error, no route
+                    //return Error <| SendHtlcPaymentError.NoMultiHopRoute
+                else
+                    let cumulativeAmounts = 
+                        Array.scan 
+                            (fun runningTotal edge -> 
+                                runningTotal + 
+                                UtxoCoin.Lightning.EdgeWeightCaluculation.nodeFee 
+                                    edge.Update.FeeBaseMSat
+                                    (int64 edge.Update.FeeProportionalMillionths)
+                                    runningTotal)
+                            amount
+                            route
+                    let cumulativeCLTVs =
+                        Array.scan
+                            (fun runningTotal edge -> 
+                                runningTotal + uint32(edge.Update.CLTVExpiryDelta.Value))
+                            currentBlockHeight
+                            route
+                    let nonFinalHops =
+                        Array.map3
+                            (fun edge cumulativeAmount cumulativeCLTV ->
                                 {
-                                    Channel = channelAfterAddHtlcPayment
-                                }
-                    }
-                connectedChannelAfterAddHtlcSent.SaveToWallet()
-                let activeChannel = { ConnectedChannel = connectedChannelAfterAddHtlcSent }
-                let! activeChannelAfterCommitSentRes = activeChannel.SendCommit()
-                match activeChannelAfterCommitSentRes with
-                | Error err -> return Error <| SendHtlcPaymentError.SendCommit err
-                | Ok activeChannelAfterCommitSent ->
-                    let! activeChannelAfterCommitReceivedRes = activeChannelAfterCommitSent.RecvCommit()
-                    match activeChannelAfterCommitReceivedRes with
-                    | Error err -> return Error <| SendHtlcPaymentError.RecvCommit err
-                    | Ok activeChannelAfterCommitReceived when waitForResult ->
-                        let! activeChannelAfterNewCommitRes = activeChannelAfterCommitReceived.RecvHtlcFulfillOrFail()
-                        match (activeChannelAfterNewCommitRes) with
-                        | Error err ->
-                            return Error <| SendHtlcPaymentError.RecvFulfillOrFail err
-                        | Ok (activeChannelAfterNewCommit, true) ->
-                            return Ok (activeChannelAfterNewCommit)
-                        | Ok (activeChannelAfterNewCommit, false) ->
-                            return Error <| SendHtlcPaymentError.ReceivedHtlcFail activeChannelAfterNewCommit
-                    | Ok activeChannelAfterCommitReceived ->
-                        return Ok (activeChannelAfterCommitReceived)
+                                    NodeId=edge.Target
+                                    ShortChannelId=Some(edge.ShortChannelId)
+                                    PaymentSecret=None
+                                    AmountToForward=cumulativeAmount
+                                    OutgoingCLTV=cumulativeCLTV
+                                })
+                            route
+                            cumulativeAmounts
+                            cumulativeCLTVs
+                    nonFinalHops 
+                    // not sure what final hop should look like in multi-hop case
+                    |> Array.append 
+                        [| 
+                            { 
+                                NodeId=targetNode 
+                                ShortChannelId=None
+                                PaymentSecret=paymentRequest.PaymentSecret
+                                AmountToForward = cumulativeAmounts |> Array.last
+                                OutgoingCLTV = (cumulativeCLTVs |> Array.last) + paymentRequest.MinFinalCLTVExpiryDelta.Value
+                            } 
+                        |]
+            else
+                { 
+                    NodeId=targetNode 
+                    ShortChannelId=None
+                    PaymentSecret=paymentRequest.PaymentSecret
+                    AmountToForward=amount
+                    OutgoingCLTV=currentBlockHeight + paymentRequest.MinFinalCLTVExpiryDelta.Value 
+                }
+                |> Array.singleton
+        
+        let { OutgoingCLTV = expiryBlockHeight; AmountToForward = finalAmount } = hops |> Array.last
+
+        let hopData =
+            hops
+            |> Array.map (fun hop ->
+                let tlvs =
+                    [|
+                        yield HopPayloadTLV.AmountToForward hop.AmountToForward
+                        yield HopPayloadTLV.OutgoingCLTV hop.OutgoingCLTV
+                        match hop.ShortChannelId with
+                        | Some(shortChannelId) ->
+                            yield HopPayloadTLV.ShortChannelId shortChannelId
+                        | None -> ()
+                        match hop.PaymentSecret with
+                        | Some paymentSecret ->
+                            yield HopPayloadTLV.PaymentData
+                                    (
+                                        PaymentSecret.Create paymentSecret,
+                                        hop.AmountToForward
+                                    )
+                        | None -> ()
+                    |]
+                (TLVPayload tlvs).ToBytes())
+            |> Array.toList
+        
+        let onionPacket =
+            Sphinx.PacketAndSecrets.Create
+                (
+                    sessionKey, 
+                    hops |> Array.map (fun hop -> hop.NodeId.Value) |> Array.toList,
+                    hopData,
+                    associatedData,
+                    Sphinx.PacketFiller.DeterministicPacketFiller
+                )
+
+        let channelAndAddHtlcMsgRes =
+            channel.Channel.AddHTLC
+                {
+                    OperationAddHTLC.Amount = finalAmount
+                    PaymentHash = paymentRequest.PaymentHash
+                    Expiry = BlockHeight expiryBlockHeight
+                    Onion = onionPacket.Packet
+                    Upstream = None
+                    Origin = Origin.Local
+                    CurrentHeight = BlockHeight currentBlockHeight
+                }
+
+        match channelAndAddHtlcMsgRes with
+        | Error (InvalidUpdateAddHTLC err) ->
+            return Error <| SendHtlcPaymentError.InvalidHtlcPayment (self, err)
+        | Error err -> return failwith <| SPrintF1 "error executing HTLC payment command: %s" err.Message
+        | Ok (channelAfterAddHtlcPayment, addHtlcMsg) ->
+            let! peerNodeAfterAddHtlcSent = peerNode.SendMsg addHtlcMsg
+            let connectedChannelAfterAddHtlcSent =
+                {
+                    connectedChannel with
+                        PeerNode = peerNodeAfterAddHtlcSent
+                        Channel =
+                            {
+                                Channel = channelAfterAddHtlcPayment
+                            }
+                }
+            connectedChannelAfterAddHtlcSent.SaveToWallet()
+            let activeChannel = { ConnectedChannel = connectedChannelAfterAddHtlcSent }
+            let! activeChannelAfterCommitSentRes = activeChannel.SendCommit()
+            match activeChannelAfterCommitSentRes with
+            | Error err -> return Error <| SendHtlcPaymentError.SendCommit err
+            | Ok activeChannelAfterCommitSent ->
+                let! activeChannelAfterCommitReceivedRes = activeChannelAfterCommitSent.RecvCommit()
+                match activeChannelAfterCommitReceivedRes with
+                | Error err -> return Error <| SendHtlcPaymentError.RecvCommit err
+                | Ok activeChannelAfterCommitReceived when waitForResult ->
+                    let! activeChannelAfterNewCommitRes = activeChannelAfterCommitReceived.RecvHtlcFulfillOrFail()
+                    match (activeChannelAfterNewCommitRes) with
+                    | Error err ->
+                        return Error <| SendHtlcPaymentError.RecvFulfillOrFail err
+                    | Ok (activeChannelAfterNewCommit, true) ->
+                        return Ok (activeChannelAfterNewCommit)
+                    | Ok (activeChannelAfterNewCommit, false) ->
+                        return Error <| SendHtlcPaymentError.ReceivedHtlcFail activeChannelAfterNewCommit
+                | Ok activeChannelAfterCommitReceived ->
+                    return Ok (activeChannelAfterCommitReceived)
     }
 
     member internal self.FailHtlc (id: HTLCId) (reason: HtlcSettleFailReason) : Async<Result<ActiveChannel * HtlcSettleStatus, RecvHtlcPaymentError>> =

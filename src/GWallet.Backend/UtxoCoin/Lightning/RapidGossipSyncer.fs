@@ -58,7 +58,7 @@ module private RoutingHeuristics =
     let CapacityFactor = 1.0
 
 
-module private EdgeWeightCaluculation =
+module internal EdgeWeightCaluculation =
     // code is partly from DotNetLightning
 
     let nodeFee (baseFee: LNMoney) (proportionalFee: int64) (paymentAmount: LNMoney) =
