@@ -368,8 +368,11 @@ module RapidGossipSyncer =
                 | false, _ -> Seq.empty      
             | None -> Seq.empty
         
-        System.Console.WriteLine("Shortest route to " + nodeAddress)
-        for edge in result do
-            System.Console.WriteLine(SPrintF1 "%A" edge)
-            System.Console.WriteLine(SPrintF1 "Weight: %f" (EdgeWeightCaluculation.edgeWeight paymentAmount edge))
+        if Seq.isEmpty result then
+            System.Console.WriteLine("Could not find route to " + nodeAddress)
+        else
+            System.Console.WriteLine("Shortest route to " + nodeAddress)
+            for edge in result do
+                System.Console.WriteLine(SPrintF1 "%A" edge)
+                System.Console.WriteLine(SPrintF1 "Weight: %f" (EdgeWeightCaluculation.edgeWeight paymentAmount edge))
         ignore result // Can't return result now because it depends on DNL types
