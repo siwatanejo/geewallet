@@ -343,9 +343,23 @@ module RapidGossipSyncer =
             return ()
         }
     
-    let GetRoute (account: UtxoCoin.NormalUtxoAccount) (nodeAddress: string) (numSatoshis: decimal) =
+    /// Get shortest route from source to target node taking cahnnel fees and cltv expiry deltas into account.
+    /// Don't use channels that have insufficient capacity for given paymentAmount.
+    /// See EdgeWeightCaluculation.edgeWeight.
+    /// If no routes can be found, return empty sequence.
+    let internal GetRoute (sourceNodeId: NodeId) (targetNodeId: NodeId) (paymentAmount: LNMoney) : seq<RoutingGrpahEdge> =
+        let tryGetPath = 
+            routingState.Graph.ShortestPathsDijkstra(
+                System.Func<RoutingGrpahEdge, float>(EdgeWeightCaluculation.edgeWeight paymentAmount), 
+                sourceNodeId)
+        match tryGetPath.Invoke targetNodeId with
+        | true, path -> path
+        | false, _ -> Seq.empty
+
+    let DebugGetRoute (account: UtxoCoin.NormalUtxoAccount) (nodeAddress: string) (numSatoshis: decimal) =
+        let paymentAmount = LNMoney.Satoshis(numSatoshis)
         let targetNodeId = NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC nodeAddress).NodeId
-        
+            
         let nodeIds = 
             seq {
                 let channelStore = ChannelStore account
@@ -353,19 +367,11 @@ module RapidGossipSyncer =
                     let serializedChannel = channelStore.LoadChannel channelId
                     yield serializedChannel.SavedChannelState.StaticChannelConfig.RemoteNodeId
             }
-        
-        let paymentAmount = LNMoney.Satoshis(numSatoshis)
 
         let result = 
             match nodeIds |> Seq.tryHead with
             | Some(ourNodeId) ->
-                let tryGetPath = 
-                    routingState.Graph.ShortestPathsDijkstra(
-                        System.Func<RoutingGrpahEdge, float>(EdgeWeightCaluculation.edgeWeight paymentAmount), 
-                        ourNodeId)
-                match tryGetPath.Invoke targetNodeId with
-                | true, path -> path
-                | false, _ -> Seq.empty      
+                GetRoute ourNodeId targetNodeId paymentAmount
             | None -> Seq.empty
         
         if Seq.isEmpty result then
