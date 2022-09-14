@@ -804,7 +804,8 @@ and internal ActiveChannel =
                 // packets are created in reverse order
                 let reversedRouteNotIncludingUs =
                     route |> Array.rev
-                    
+                  
+                // first element of scan function's output is its state parameter, so we skip it
                 let cumulativeAmounts = 
                     Array.scan 
                         (fun runningTotal edge -> 
@@ -815,6 +816,7 @@ and internal ActiveChannel =
                                 runningTotal)
                         amount
                         reversedRouteNotIncludingUs
+                    |> Array.skip 1
                     
                 let cumulativeCLTVs =
                     Array.scan
@@ -822,6 +824,7 @@ and internal ActiveChannel =
                             runningTotal + uint32(edge.Update.CLTVExpiryDelta.Value))
                         finalHop.OutgoingCLTV
                         reversedRouteNotIncludingUs
+                    |> Array.skip 1
                     
                 let nonFinalHops =
                     Array.map3
