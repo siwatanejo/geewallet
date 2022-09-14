@@ -357,7 +357,7 @@ module RapidGossipSyncer =
         | false, _ -> Seq.empty
 
     let DebugGetRoute (account: UtxoCoin.NormalUtxoAccount) (nodeAddress: string) (numSatoshis: decimal) =
-        let paymentAmount = LNMoney.Satoshis(numSatoshis)
+        let paymentAmount = LNMoney.Satoshis numSatoshis
         let targetNodeId = NodeIdentifier.TcpEndPoint(NodeEndPoint.Parse Currency.BTC nodeAddress).NodeId
             
         let nodeIds = 
@@ -370,7 +370,7 @@ module RapidGossipSyncer =
 
         let result = 
             match nodeIds |> Seq.tryHead with
-            | Some(ourNodeId) ->
+            | Some ourNodeId ->
                 GetRoute ourNodeId targetNodeId paymentAmount
             | None -> Seq.empty
         
