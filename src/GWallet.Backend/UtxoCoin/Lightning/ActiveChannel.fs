@@ -17,6 +17,9 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 open GWallet.Backend.UtxoCoin
 open GWallet.Backend.UtxoCoin.Lightning.Watcher
 
+/// Information about a hop in multi-hop htlc payment.
+/// Non-final hops have ShortChannelId but no PaymentSecret, 
+/// final hop has PaymentSecret but no ShortChannelId
 type internal Hop =
     {
         NodeId: NodeId
@@ -775,6 +778,103 @@ and internal ActiveChannel =
             | _ -> return Error <| ExpectedHtlcFulfillOrFail channelMsg
     }
 
+    member private self.GetHopsForHtlcPayment sourceNode targetNode (paymentRequest: PaymentRequest) amount currentBlockHeight =
+        let finalHop =
+                { 
+                    NodeId=targetNode 
+                    ShortChannelId=None
+                    PaymentSecret=paymentRequest.PaymentSecret
+                    AmountToForward=amount
+                    OutgoingCLTV=currentBlockHeight + paymentRequest.MinFinalCLTVExpiryDelta.Value 
+                }
+        
+        if sourceNode <> targetNode then // Multihop payment
+            let route = 
+                UtxoCoin.Lightning.RapidGossipSyncer.GetRoute sourceNode targetNode amount
+                |> Seq.toArray
+            if Seq.isEmpty route then
+                failwith (SPrintF1 "No route to %A is found" targetNode)
+                //return Error <| SendHtlcPaymentError.NoMultiHopRoute
+            else
+                // routing starts from node that is on the other end of our channel, so we are not included
+                // packets are created in reverse order
+                let reversedRouteNotIncludingUs =
+                    route |> Array.rev
+                    
+                let cumulativeAmounts = 
+                    Array.scan 
+                        (fun runningTotal edge -> 
+                            runningTotal + 
+                            UtxoCoin.Lightning.EdgeWeightCaluculation.nodeFee 
+                                edge.Update.FeeBaseMSat
+                                (int64 edge.Update.FeeProportionalMillionths)
+                                runningTotal)
+                        amount
+                        reversedRouteNotIncludingUs
+                    
+                let cumulativeCLTVs =
+                    Array.scan
+                        (fun runningTotal edge -> 
+                            runningTotal + uint32(edge.Update.CLTVExpiryDelta.Value))
+                        finalHop.OutgoingCLTV
+                        reversedRouteNotIncludingUs
+                    
+                let nonFinalHops =
+                    Array.map3
+                        (fun edge cumulativeAmount cumulativeCLTV ->
+                            {
+                                NodeId=edge.Source
+                                ShortChannelId=Some(edge.ShortChannelId)
+                                PaymentSecret=None
+                                AmountToForward=cumulativeAmount
+                                OutgoingCLTV=cumulativeCLTV
+                            })
+                        reversedRouteNotIncludingUs
+                        cumulativeAmounts
+                        cumulativeCLTVs
+                    
+                Array.append [| finalHop |] nonFinalHops
+        else
+            [| finalHop |]
+    
+    member private self.GetOnionPacketForHtlcPayment sessionKey associatedData hops =
+        let hopsData =
+            hops
+            |> Array.map (fun hop ->
+                let tlvs =
+                    [|
+                        yield HopPayloadTLV.AmountToForward hop.AmountToForward
+                        yield HopPayloadTLV.OutgoingCLTV hop.OutgoingCLTV
+                        match hop.ShortChannelId with
+                        | Some(shortChannelId) ->
+                            yield HopPayloadTLV.ShortChannelId shortChannelId
+                        | None -> ()
+                        match hop.PaymentSecret with
+                        | Some paymentSecret ->
+                            yield HopPayloadTLV.PaymentData
+                                    (
+                                        PaymentSecret.Create paymentSecret,
+                                        hop.AmountToForward
+                                    )
+                        | None -> ()
+                    |]
+                (TLVPayload tlvs).ToBytes())
+            |> Array.toList
+
+        let pubKeys =
+            hops 
+            |> Array.map (fun hop -> hop.NodeId.Value) 
+            |> Array.toList
+        
+        Sphinx.PacketAndSecrets.Create
+            (
+                sessionKey, 
+                pubKeys,
+                hopsData,
+                associatedData,
+                Sphinx.PacketFiller.DeterministicPacketFiller
+            )
+
     member internal self.SendHtlcPayment (invoice: PaymentInvoice) (waitForResult: bool): Async<Result<ActiveChannel, SendHtlcPaymentError>> = async {
         let connectedChannel = self.ConnectedChannel
         let peerNode = connectedChannel.PeerNode
@@ -806,107 +906,12 @@ and internal ActiveChannel =
                 uint32 blockHeightResponse.Height
         }
 
-        let hops = 
-            let finalHop =
-                { 
-                    NodeId=targetNode 
-                    ShortChannelId=None
-                    PaymentSecret=paymentRequest.PaymentSecret
-                    AmountToForward=amount
-                    OutgoingCLTV=currentBlockHeight + paymentRequest.MinFinalCLTVExpiryDelta.Value 
-                }
-            if sourceNode <> targetNode then // Multihop payment
-                let route = 
-                    UtxoCoin.Lightning.RapidGossipSyncer.GetRoute sourceNode targetNode amount
-                    |> Seq.toArray
-                if Seq.isEmpty route then
-                    failwith "no route" // error, no route
-                    //return Error <| SendHtlcPaymentError.NoMultiHopRoute
-                else
-                    // routing starts from node that is on the other end of our channel, so we are not included
-                    // packets are created in reverse order
-                    let reversedRouteNotIncludingUs =
-                        route |> Array.rev
-                    
-                    let cumulativeAmounts = 
-                        Array.scan 
-                            (fun runningTotal edge -> 
-                                runningTotal + 
-                                UtxoCoin.Lightning.EdgeWeightCaluculation.nodeFee 
-                                    edge.Update.FeeBaseMSat
-                                    (int64 edge.Update.FeeProportionalMillionths)
-                                    runningTotal)
-                            amount
-                            reversedRouteNotIncludingUs
-                    
-                    let cumulativeCLTVs =
-                        Array.scan
-                            (fun runningTotal edge -> 
-                                runningTotal + uint32(edge.Update.CLTVExpiryDelta.Value))
-                            finalHop.OutgoingCLTV
-                            reversedRouteNotIncludingUs
-                    
-                    let nonFinalHops =
-                        Array.map3
-                            (fun edge cumulativeAmount cumulativeCLTV ->
-                                {
-                                    NodeId=edge.Source
-                                    ShortChannelId=Some(edge.ShortChannelId)
-                                    PaymentSecret=None
-                                    AmountToForward=cumulativeAmount
-                                    OutgoingCLTV=cumulativeCLTV
-                                })
-                            reversedRouteNotIncludingUs
-                            cumulativeAmounts
-                            cumulativeCLTVs
-                    
-                    Array.append [| finalHop |] nonFinalHops
-            else
-                [| finalHop |]
-        
+        let hops = self.GetHopsForHtlcPayment sourceNode targetNode paymentRequest amount currentBlockHeight
         let { OutgoingCLTV = expiryBlockHeight; AmountToForward = finalAmount } = hops |> Array.last
 
         // Sphinx.PacketAndSecrets.Create expects lists of hop data and node pubKeys 
         // that are in forward order, so we must reverse them
-        let hopsData =
-            hops
-            |> Array.rev
-            |> Array.map (fun hop ->
-                let tlvs =
-                    [|
-                        yield HopPayloadTLV.AmountToForward hop.AmountToForward
-                        yield HopPayloadTLV.OutgoingCLTV hop.OutgoingCLTV
-                        match hop.ShortChannelId with
-                        | Some(shortChannelId) ->
-                            yield HopPayloadTLV.ShortChannelId shortChannelId
-                        | None -> ()
-                        match hop.PaymentSecret with
-                        | Some paymentSecret ->
-                            yield HopPayloadTLV.PaymentData
-                                    (
-                                        PaymentSecret.Create paymentSecret,
-                                        hop.AmountToForward
-                                    )
-                        | None -> ()
-                    |]
-                (TLVPayload tlvs).ToBytes())
-            |> Array.toList
-
-        let pubKeys =
-            hops 
-            |> Array.rev 
-            |> Array.map (fun hop -> hop.NodeId.Value) 
-            |> Array.toList
-        
-        let onionPacket =
-            Sphinx.PacketAndSecrets.Create
-                (
-                    sessionKey, 
-                    pubKeys,
-                    hopsData,
-                    associatedData,
-                    Sphinx.PacketFiller.DeterministicPacketFiller
-                )
+        let onionPacket = self.GetOnionPacketForHtlcPayment sessionKey associatedData (hops |> Array.rev)
 
         let channelAndAddHtlcMsgRes =
             channel.Channel.AddHTLC
