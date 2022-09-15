@@ -163,12 +163,13 @@ module RapidGossipSyncer =
         let CltvExpiryDelta = 64uy
         let IncrementalUpdate = 128uy
     
-    /// Class responsible for storing and updating routing graph
-    type internal RoutingState() =
-        let announcements = System.Collections.Generic.HashSet<CompactAnnouncment>()
-        let mutable updates: Map<ShortChannelId, ChannelUpdates> = Map.empty
-        let mutable lastSyncTimestamp = 0u
-        let mutable routingGraph: RoutingGraph = RoutingGraph(AdjacencyGraph())
+    
+    type internal RoutingGraphData private(announcements: Set<CompactAnnouncment>, 
+                                           updates: Map<ShortChannelId, ChannelUpdates>,
+                                           lastSyncTimestamp: uint32,
+                                           routingGraph: RoutingGraph) =
+        
+        new() = RoutingGraphData(Set.empty, Map.empty, 0u, RoutingGraph(AdjacencyGraph()))
 
         member self.LastSyncTimestamp = lastSyncTimestamp
 
@@ -176,18 +177,21 @@ module RapidGossipSyncer =
 
         member self.Update (newAnnouncements : seq<CompactAnnouncment>) 
                            (newUpdates: Map<ShortChannelId, ChannelUpdates>) 
-                           (syncTimestamp: uint32) =
-            announcements.UnionWith newAnnouncements
+                           (syncTimestamp: uint32) : RoutingGraphData =
+            let announcements = announcements |> Set.union (newAnnouncements |> Set.ofSeq)
             
-            if updates.IsEmpty then
-                updates <- newUpdates
-            else
-                newUpdates |> Map.iter (fun channelId newUpd ->
-                    match updates |> Map.tryFind channelId with
-                    | Some upd ->
-                        updates <- updates |> Map.add channelId (upd.Combine newUpd)
-                    | None ->
-                        updates <- updates |> Map.add channelId newUpd )
+            let updates =
+                if updates.IsEmpty then
+                    newUpdates
+                else
+                    let mutable tmpUpdates = updates
+                    newUpdates |> Map.iter (fun channelId newUpd ->
+                        match tmpUpdates |> Map.tryFind channelId with
+                        | Some upd ->
+                            tmpUpdates <- updates |> Map.add channelId (upd.Combine newUpd)
+                        | None ->
+                            tmpUpdates <- updates |> Map.add channelId newUpd )
+                    tmpUpdates
 
             let baseGraph = AdjacencyGraph<NodeId, RoutingGrpahEdge>()
 
@@ -201,10 +205,9 @@ module RapidGossipSyncer =
                 updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
                 updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
 
-            routingGraph <- RoutingGraph(baseGraph)
-            lastSyncTimestamp <- syncTimestamp
+            RoutingGraphData(announcements, updates, syncTimestamp, RoutingGraph(baseGraph))
 
-    let internal routingState = RoutingState()
+    let mutable internal routingState = RoutingGraphData()
 
     let Sync () =
         async {
@@ -341,7 +344,7 @@ module RapidGossipSyncer =
 
             let updates = readUpdates updatesCount 0UL Map.empty
 
-            routingState.Update announcements updates lastSeenTimestamp
+            routingState <- routingState.Update announcements updates lastSeenTimestamp
 
             return ()
         }
