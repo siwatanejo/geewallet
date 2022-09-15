@@ -22,10 +22,10 @@ type internal RoutingGrpahEdge =
         ShortChannelId : ShortChannelId
         Update: UnsignedChannelUpdateMsg
     }
-    with
-        interface IEdge<NodeId> with
-            member this.Source = this.Source
-            member this.Target = this.Target
+    interface IEdge<NodeId> with
+        member this.Source = this.Source
+        member this.Target = this.Target
+
 
 type internal RoutingGraph = ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
 
@@ -102,7 +102,7 @@ module internal EdgeWeightCaluculation =
 
 module RapidGossipSyncer =
     
-    let private RGSPrefix = [| 76uy; 68uy; 75uy; 1uy |]
+    let private RgsPrefix = [| 76uy; 68uy; 75uy; 1uy |]
 
     type internal CompactAnnouncment =
         {
@@ -127,28 +127,28 @@ module RapidGossipSyncer =
             Forward: UnsignedChannelUpdateMsg option
             Backward: UnsignedChannelUpdateMsg option
         }
-        with
-            static member Empty = { Forward = None; Backward = None }
+        static member Empty = { Forward = None; Backward = None }
     
-            member self.With(update: UnsignedChannelUpdateMsg) =
-                let isForward = (update.ChannelFlags &&& 1uy) = 0uy
-                if isForward then
-                    match self.Forward with
-                    | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
-                    | _ -> { self with Forward = Some(update) }
-                else
-                    match self.Backward with
-                    | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
-                    | _ -> { self with Backward = Some(update) }
+        member self.With(update: UnsignedChannelUpdateMsg) =
+            let isForward = (update.ChannelFlags &&& 1uy) = 0uy
+            if isForward then
+                match self.Forward with
+                | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
+                | _ -> { self with Forward = Some(update) }
+            else
+                match self.Backward with
+                | Some(prevUpd) when update.Timestamp < prevUpd.Timestamp -> self
+                | _ -> { self with Backward = Some(update) }
 
-            member self.Combine(other: ChannelUpdates) =
-                let combine upd1opt upd2opt : UnsignedChannelUpdateMsg option =
-                    match upd1opt, upd2opt with
-                    | None, None -> None
-                    | Some(_), None -> upd1opt
-                    | None, Some(_) -> upd2opt
-                    | Some(upd1), Some(upd2) -> if upd1.Timestamp > upd2.Timestamp then upd1opt else upd2opt
-                { Forward = combine self.Forward other.Forward; Backward = combine self.Backward other.Backward }
+        member self.Combine(other: ChannelUpdates) =
+            let combine upd1opt upd2opt : UnsignedChannelUpdateMsg option =
+                match upd1opt, upd2opt with
+                | None, None -> None
+                | Some(_), None -> upd1opt
+                | None, Some(_) -> upd2opt
+                | Some(upd1), Some(upd2) -> if upd1.Timestamp > upd2.Timestamp then upd1opt else upd2opt
+            { Forward = combine self.Forward other.Forward; Backward = combine self.Backward other.Backward }
+
 
     /// see https://github.com/lightningdevkit/rust-lightning/tree/main/lightning-rapid-gossip-sync/#custom-channel-update
     module internal CustomChannelUpdateFlags =
@@ -182,7 +182,7 @@ module RapidGossipSyncer =
             else
                 newUpdates |> Map.iter (fun channelId newUpd ->
                     match updates |> Map.tryFind channelId with
-                    | Some(upd) ->
+                    | Some upd ->
                         updates <- updates |> Map.add channelId (upd.Combine newUpd)
                     | None ->
                         updates <- updates |> Map.add channelId newUpd )
@@ -192,8 +192,8 @@ module RapidGossipSyncer =
             for ann in announcements do
                 let updates = updates.[ann.ShortChannelId]
                 
-                let addEdge source traget (upd : UnsignedChannelUpdateMsg) =
-                    let edge = { Source=source; Target=traget; ShortChannelId=upd.ShortChannelId; Update=upd }
+                let addEdge source target (upd : UnsignedChannelUpdateMsg) =
+                    let edge = { Source = source; Target = target; ShortChannelId = upd.ShortChannelId; Update = upd }
                     baseGraph.AddVerticesAndEdge edge |> ignore
                 
                 updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
@@ -207,7 +207,7 @@ module RapidGossipSyncer =
     let Sync () =
         async {
             use httpClient = new HttpClient()
-
+            
             let! gossipData =
                 let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" routingState.LastSyncTimestamp
                 httpClient.GetByteArrayAsync url
@@ -216,13 +216,13 @@ module RapidGossipSyncer =
             use memStream = new MemoryStream(gossipData)
             use lightningReader = new LightningReaderStream(memStream)
 
-            let prefix = Array.zeroCreate RGSPrefix.Length
+            let prefix = Array.zeroCreate RgsPrefix.Length
             
             do! lightningReader.ReadAsync(prefix, 0, prefix.Length)
                 |> Async.AwaitTask
                 |> Async.Ignore
 
-            if not (Enumerable.SequenceEqual (prefix, RGSPrefix)) then
+            if not (Enumerable.SequenceEqual (prefix, RgsPrefix)) then
                 failwith "Invalid version prefix"
 
             let chainHash = lightningReader.ReadUInt256 true
@@ -230,7 +230,8 @@ module RapidGossipSyncer =
                 failwith "Invalid chain hash"
 
             let lastSeenTimestamp = lightningReader.ReadUInt32 false
-            let backdatedTimestamp = lastSeenTimestamp - uint (24 * 3600 * 7)
+            let secondsInWeek = uint (24 * 3600 * 7)
+            let backdatedTimestamp = lastSeenTimestamp - secondsInWeek
 
             let nodeIdsCount = lightningReader.ReadUInt32 false
             let nodeIds = 
