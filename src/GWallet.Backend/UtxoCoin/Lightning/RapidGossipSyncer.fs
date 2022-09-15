@@ -1,5 +1,6 @@
 ﻿namespace GWallet.Backend.UtxoCoin.Lightning
 
+open System
 open System.IO
 open System.Net.Http
 open System.Linq
@@ -8,11 +9,12 @@ open NBitcoin
 open DotNetLightning.Serialization
 open DotNetLightning.Serialization.Msgs
 open DotNetLightning.Utils
+open QuikGraph
+open QuikGraph.Algorithms
+
 open ResultUtils.Portability
 open GWallet.Backend
 open GWallet.Backend.FSharpUtil.UwpHacks
-open QuikGraph
-open QuikGraph.Algorithms
 
 
 type internal RoutingGrpahEdge = 
@@ -33,7 +35,7 @@ type internal RoutingGraph = ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
 module private RoutingHeuristics =
     // code moslty from DotNetLightning
     let BLOCK_TIME_TWO_MONTHS = 8640us |> BlockHeightOffset16
-    let CAPACITY_CHANNEL_LOW = LNMoney.Satoshis(1000L)
+    let CAPACITY_CHANNEL_LOW = LNMoney.Satoshis 1000L
 
     let CAPACITY_CHANNEL_HIGH =
         DotNetLightning.Channel.ChannelConstants.MAX_FUNDING_SATOSHIS.Satoshi
@@ -54,7 +56,7 @@ module private RoutingHeuristics =
             (v - min) / (max - min)
 
     // factors?
-    let CLTVDeltaFactor = 1.0
+    let CltvDeltaFactor = 1.0
     let CapacityFactor = 1.0
 
 
@@ -95,7 +97,7 @@ module internal EdgeWeightCaluculation =
                     float RoutingHeuristics.CLTV_LOW,
                     float RoutingHeuristics.CLTV_HIGH)
             let factor = 
-                cltvFactor * RoutingHeuristics.CLTVDeltaFactor 
+                cltvFactor * RoutingHeuristics.CltvDeltaFactor 
                 + capFactor * RoutingHeuristics.CapacityFactor
             factor * feeCost
 
@@ -376,10 +378,10 @@ module RapidGossipSyncer =
             | None -> Seq.empty
         
         if Seq.isEmpty result then
-            System.Console.WriteLine("Could not find route to " + nodeAddress)
+            Console.WriteLine("Could not find route to " + nodeAddress)
         else
-            System.Console.WriteLine("Shortest route to " + nodeAddress)
+            Console.WriteLine("Shortest route to " + nodeAddress)
             for edge in result do
-                System.Console.WriteLine(SPrintF1 "%A" edge)
-                System.Console.WriteLine(SPrintF1 "Weight: %f" (EdgeWeightCaluculation.edgeWeight paymentAmount edge))
+                Console.WriteLine(SPrintF1 "%A" edge)
+                Console.WriteLine(SPrintF1 "Weight: %f" (EdgeWeightCaluculation.edgeWeight paymentAmount edge))
         ignore result // Can't return result now because it depends on DNL types
