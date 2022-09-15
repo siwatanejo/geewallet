@@ -29,6 +29,14 @@ type internal Hop =
         OutgoingCLTV: uint32
     }
 
+/// used in ActiveChannel.SendHtlcPayment
+type private HopsAndFinalAmounts =
+    {
+        Hops: Hop[]
+        FinalAmount: LNMoney
+        FinalCltv: uint32
+    }
+
 type HtlcSettleFailReason =
     | UnknownPaymentHash
     | IncorrectPaymentAmount
@@ -663,7 +671,7 @@ and internal ActiveChannel =
             | _ -> return Error <| ExpectedCommitmentSigned channelMsg
     }
 
-    member private self.RecvHtlcFulfillOrFail(): Async<Result<ActiveChannel * bool, RecvFulfillOrFailError>> = async {
+    member private self.RecvHtlcFulfillOrFail(onionSharedSecrets: (Key * PubKey) list): Async<Result<ActiveChannel * bool, RecvFulfillOrFailError>> = async {
         let connectedChannel = self.ConnectedChannel
         let peerNode = connectedChannel.PeerNode
         let channel = connectedChannel.Channel
@@ -714,6 +722,7 @@ and internal ActiveChannel =
                         | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
                         | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, true)
             | :? UpdateFailHTLCMsg as theirFailMsg ->
+                System.Console.WriteLine(SPrintF1 "*** theirFailMsg = %A" theirFailMsg)
                 let channelAfterFailMsgRes =
                     channel.Channel.ApplyUpdateFailHTLC theirFailMsg
                 match channelAfterFailMsgRes with
@@ -740,6 +749,11 @@ and internal ActiveChannel =
                     match activeChannelAfterCommitReceivedRes with
                     | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
                     | Ok activeChannelAfterCommitReceived ->
+                        let res = Sphinx.ErrorPacket.TryParse(theirFailMsg.Reason.Data, onionSharedSecrets)
+                        let strRep = SPrintF1 "%A" res
+                        Console.WriteLine("theirFailMsg:")
+                        Console.WriteLine(strRep)
+
                         let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
                         match activeChannelAfterCommitSentRes with
                         | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
@@ -778,12 +792,11 @@ and internal ActiveChannel =
             | _ -> return Error <| ExpectedHtlcFulfillOrFail channelMsg
     }
 
-    member private self.GetHopsForHtlcPayment sourceNode 
-                                              targetNode 
-                                              (paymentRequest: PaymentRequest) 
-                                              amount 
-                                              currentBlockHeight
-                                                : Result<Hop[], SendHtlcPaymentError> =
+    member private self.GetHopsAndFinalAmountsForHtlcPayment sourceNode 
+                                                            targetNode 
+                                                            (paymentRequest: PaymentRequest) 
+                                                            amount 
+                                                            currentBlockHeight =
         let finalHop =
                 { 
                     NodeId=targetNode 
@@ -804,8 +817,10 @@ and internal ActiveChannel =
                 // packets are created in reverse order
                 let reversedRouteNotIncludingUs =
                     route |> Array.rev
-                  
-                // first element of scan function's output is its state parameter, so we skip it
+                
+                // first element of scan function's output is its state parameter, 
+                // and length is input array's length + 1.
+                // Final element is final amount, rest are used in hops
                 let cumulativeAmounts = 
                     Array.scan 
                         (fun runningTotal edge -> 
@@ -816,15 +831,13 @@ and internal ActiveChannel =
                                 runningTotal)
                         amount
                         reversedRouteNotIncludingUs
-                    |> Array.skip 1
-                    
+                
                 let cumulativeCLTVs =
                     Array.scan
                         (fun runningTotal edge -> 
                             runningTotal + uint32(edge.Update.CLTVExpiryDelta.Value))
                         finalHop.OutgoingCLTV
                         reversedRouteNotIncludingUs
-                    |> Array.skip 1
                     
                 let nonFinalHops =
                     Array.map3
@@ -837,15 +850,24 @@ and internal ActiveChannel =
                                 OutgoingCLTV=cumulativeCLTV
                             })
                         reversedRouteNotIncludingUs
-                        cumulativeAmounts
-                        cumulativeCLTVs
-                    
-                Ok(Array.append [| finalHop |] nonFinalHops)
+                        (cumulativeAmounts |> Array.skipBack 1)
+                        (cumulativeCLTVs |> Array.skipBack 1)
+                                   
+                Ok({ 
+                        Hops = Array.append [| finalHop |] nonFinalHops;
+                        FinalAmount = cumulativeAmounts |> Array.last;
+                        FinalCltv = cumulativeCLTVs |> Array.last 
+                   })
         else
-            Ok([| finalHop |])
+            Ok({ 
+                    Hops = [| finalHop |];
+                    FinalAmount = amount;
+                    FinalCltv = finalHop.OutgoingCLTV
+               })
     
     member private self.GetOnionPacketForHtlcPayment sessionKey associatedData hops =
         let hopsData =
+            System.Console.WriteLine("TLVS:")
             hops
             |> Array.map (fun hop ->
                 let tlvs =
@@ -865,6 +887,9 @@ and internal ActiveChannel =
                                     )
                         | None -> ()
                     |]
+                let stringRep = String.Join("\n", tlvs |> Seq.map (fun each -> each.ToString()))
+                System.Console.WriteLine(stringRep)
+                System.Console.WriteLine()
                 (TLVPayload tlvs).ToBytes())
             |> Array.toList
 
@@ -872,6 +897,8 @@ and internal ActiveChannel =
             hops 
             |> Array.map (fun hop -> hop.NodeId.Value) 
             |> Array.toList
+        System.Console.WriteLine("PubKeys:")
+        for each in pubKeys do System.Console.WriteLine(each.ToString())
         
         Sphinx.PacketAndSecrets.Create
             (
@@ -913,10 +940,9 @@ and internal ActiveChannel =
                 uint32 blockHeightResponse.Height
         }
 
-        match self.GetHopsForHtlcPayment sourceNode targetNode paymentRequest amount currentBlockHeight with
+        match self.GetHopsAndFinalAmountsForHtlcPayment sourceNode targetNode paymentRequest amount currentBlockHeight with
         | Error err -> return Error err
-        | Ok hops ->
-            let { OutgoingCLTV = expiryBlockHeight; AmountToForward = finalAmount } = hops |> Array.last
+        | Ok({ Hops = hops; FinalAmount = finalAmount; FinalCltv = expiryBlockHeight }) ->
 
             // Sphinx.PacketAndSecrets.Create expects lists of hop data and node pubKeys 
             // that are in forward order, so we must reverse them
@@ -959,7 +985,7 @@ and internal ActiveChannel =
                     match activeChannelAfterCommitReceivedRes with
                     | Error err -> return Error <| SendHtlcPaymentError.RecvCommit err
                     | Ok activeChannelAfterCommitReceived when waitForResult ->
-                        let! activeChannelAfterNewCommitRes = activeChannelAfterCommitReceived.RecvHtlcFulfillOrFail()
+                        let! activeChannelAfterNewCommitRes = activeChannelAfterCommitReceived.RecvHtlcFulfillOrFail(onionPacket.SharedSecrets)
                         match (activeChannelAfterNewCommitRes) with
                         | Error err ->
                             return Error <| SendHtlcPaymentError.RecvFulfillOrFail err
