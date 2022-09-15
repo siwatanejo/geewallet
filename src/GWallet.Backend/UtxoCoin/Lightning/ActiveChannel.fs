@@ -17,6 +17,33 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 open GWallet.Backend.UtxoCoin
 open GWallet.Backend.UtxoCoin.Lightning.Watcher
 
+
+type internal RoutingHopInfo =
+    {
+        NodeId: NodeId
+        ShortChannelId: ShortChannelId
+        FeeBaseMSat: LNMoney
+        FeeProportionalMillionths: uint32
+        CltvExpiryDelta: uint32
+    }
+    static member FromGraphEdge(edge: RoutingGrpahEdge) =
+        {
+            NodeId = edge.Source
+            ShortChannelId = edge.Update.ShortChannelId
+            FeeBaseMSat = edge.Update.FeeBaseMSat
+            FeeProportionalMillionths = edge.Update.FeeProportionalMillionths
+            CltvExpiryDelta = edge.Update.CLTVExpiryDelta.Value |> uint32
+        }
+
+    static member FromExtraHop(extraHop: ExtraHop) =
+        {
+            NodeId = extraHop.NodeIdValue
+            ShortChannelId = extraHop.ShortChannelIdValue
+            FeeBaseMSat = extraHop.FeeBaseValue
+            FeeProportionalMillionths = extraHop.FeeProportionalMillionthsValue
+            CltvExpiryDelta = extraHop.CLTVExpiryDeltaValue.Value |> uint32
+        }
+
 /// Information about a hop in multi-hop htlc payment.
 /// Non-final hops have ShortChannelId but no PaymentSecret, 
 /// final hop has PaymentSecret but no ShortChannelId
@@ -808,8 +835,27 @@ and internal ActiveChannel =
         
         if sourceNode <> targetNode then // Multihop payment
             let route = 
-                UtxoCoin.Lightning.RapidGossipSyncer.GetRoute sourceNode targetNode amount
-                |> Seq.toArray
+                let directRoute =
+                    UtxoCoin.Lightning.RapidGossipSyncer.GetRoute sourceNode targetNode amount
+                    |> Seq.map RoutingHopInfo.FromGraphEdge
+                    |> Seq.toArray
+                if Array.isEmpty directRoute then
+                    seq {
+                        for extraRoute in paymentRequest.RoutingInfo do
+                            match extraRoute with
+                            | head :: _ -> 
+                                let publicPart = 
+                                    UtxoCoin.Lightning.RapidGossipSyncer.GetRoute sourceNode head.NodeIdValue amount
+                                    |> Seq.map RoutingHopInfo.FromGraphEdge
+                                    |> Seq.toArray
+                                if not <| Array.isEmpty publicPart then
+                                    let extraPart = extraRoute |> Seq.map RoutingHopInfo.FromExtraHop |> Seq.toArray
+                                    yield Array.append publicPart extraPart
+                            | _ -> ()
+                    }
+                    |> Seq.head // ?
+                else
+                    directRoute
             if Seq.isEmpty route then
                 Error(SendHtlcPaymentError.NoRouteFound targetNode)
             else
@@ -823,28 +869,28 @@ and internal ActiveChannel =
                 // Final element is final amount, rest are used in hops
                 let cumulativeAmounts = 
                     Array.scan 
-                        (fun runningTotal edge -> 
+                        (fun runningTotal hopInfo -> 
                             runningTotal + 
                             UtxoCoin.Lightning.EdgeWeightCaluculation.nodeFee 
-                                edge.Update.FeeBaseMSat
-                                (int64 edge.Update.FeeProportionalMillionths)
+                                hopInfo.FeeBaseMSat
+                                (int64 hopInfo.FeeProportionalMillionths)
                                 runningTotal)
                         amount
                         reversedRouteNotIncludingUs
                 
                 let cumulativeCLTVs =
                     Array.scan
-                        (fun runningTotal edge -> 
-                            runningTotal + uint32(edge.Update.CLTVExpiryDelta.Value))
+                        (fun runningTotal hopInfo -> 
+                            runningTotal + hopInfo.CltvExpiryDelta)
                         finalHop.OutgoingCLTV
                         reversedRouteNotIncludingUs
                     
                 let nonFinalHops =
                     Array.map3
-                        (fun edge cumulativeAmount cumulativeCLTV ->
+                        (fun (hopInfo: RoutingHopInfo) cumulativeAmount cumulativeCLTV ->
                             {
-                                NodeId=edge.Source
-                                ShortChannelId=Some(edge.ShortChannelId)
+                                NodeId=hopInfo.NodeId
+                                ShortChannelId=Some(hopInfo.ShortChannelId)
                                 PaymentSecret=None
                                 AmountToForward=cumulativeAmount
                                 OutgoingCLTV=cumulativeCLTV
