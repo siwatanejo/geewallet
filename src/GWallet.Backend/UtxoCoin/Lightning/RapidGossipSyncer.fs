@@ -216,7 +216,9 @@ module RapidGossipSyncer =
             use httpClient = new HttpClient()
             
             let! gossipData =
-                let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" routingState.LastSyncTimestamp
+                // always use 0 because incremental sync is not yet implemented
+                let timestamp = 0u //routingState.LastSyncTimestamp
+                let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" timestamp
                 httpClient.GetByteArrayAsync url
                 |> Async.AwaitTask
 
@@ -285,6 +287,9 @@ module RapidGossipSyncer =
                     let customChannelFlag = lightningReader.ReadByte()
                     let standardChannelFlagMask = 0b11uy
                     let standardChannelFlag = customChannelFlag &&& standardChannelFlagMask
+
+                    if customChannelFlag &&& CustomChannelUpdateFlags.IncrementalUpdate > 0uy then
+                        failwith "We don't support increamental updates yet!"
 
                     let cltvExpiryDelta =
                         if customChannelFlag &&& CustomChannelUpdateFlags.CltvExpiryDelta > 0uy then
