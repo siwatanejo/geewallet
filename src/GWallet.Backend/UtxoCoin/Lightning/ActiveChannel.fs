@@ -18,30 +18,17 @@ open GWallet.Backend.UtxoCoin
 open GWallet.Backend.UtxoCoin.Lightning.Watcher
 
 
-type internal RoutingHopInfo =
-    {
-        NodeId: NodeId
-        ShortChannelId: ShortChannelId
-        FeeBaseMSat: LNMoney
-        FeeProportionalMillionths: uint32
-        CltvExpiryDelta: uint32
-    }
-    static member FromGraphEdge(edge: RoutingGrpahEdge) =
-        {
-            NodeId = edge.Source
-            ShortChannelId = edge.Update.ShortChannelId
-            FeeBaseMSat = edge.Update.FeeBaseMSat
-            FeeProportionalMillionths = edge.Update.FeeProportionalMillionths
-            CltvExpiryDelta = edge.Update.CLTVExpiryDelta.Value |> uint32
-        }
-
-    static member FromExtraHop(extraHop: ExtraHop) =
-        {
-            NodeId = extraHop.NodeIdValue
-            ShortChannelId = extraHop.ShortChannelIdValue
-            FeeBaseMSat = extraHop.FeeBaseValue
-            FeeProportionalMillionths = extraHop.FeeProportionalMillionthsValue
-            CltvExpiryDelta = extraHop.CLTVExpiryDeltaValue.Value |> uint32
+module ExtraHop =
+    let internal ToIRoutingHopInfo (extraHop : ExtraHop) =
+        { new IRoutingHopInfo with
+            override self.NodeId = extraHop.NodeIdValue
+            override self.ShortChannelId = extraHop.ShortChannelIdValue
+            override self.FeeBaseMSat = extraHop.FeeBaseValue
+            override self.FeeProportionalMillionths = extraHop.FeeProportionalMillionthsValue
+            override self.CltvExpiryDelta = extraHop.CLTVExpiryDeltaValue.Value |> uint32
+            // Folowing values are only used in edge weight calculation
+            override self.HTLCMaximumMSat = Some RoutingHeuristics.CAPACITY_CHANNEL_HIGH
+            override self.HTLCMinimumMSat = LNMoney.Zero
         }
 
 /// Information about a hop in multi-hop htlc payment.
@@ -849,7 +836,7 @@ and internal ActiveChannel =
             let route = 
                 let directRoute =
                     UtxoCoin.Lightning.RapidGossipSyncer.GetRoute sourceNode targetNode amount
-                    |> Seq.map RoutingHopInfo.FromGraphEdge
+                    |> Seq.cast<IRoutingHopInfo>
                     |> Seq.toArray
                 if Array.isEmpty directRoute then
                     seq {
@@ -858,14 +845,19 @@ and internal ActiveChannel =
                             | head :: _ -> 
                                 let publicPart = 
                                     UtxoCoin.Lightning.RapidGossipSyncer.GetRoute sourceNode head.NodeIdValue amount
-                                    |> Seq.map RoutingHopInfo.FromGraphEdge
+                                    |> Seq.cast<IRoutingHopInfo>
                                     |> Seq.toArray
                                 if not <| Array.isEmpty publicPart then
-                                    let extraPart = extraRoute |> Seq.map RoutingHopInfo.FromExtraHop |> Seq.toArray
+                                    let extraPart = extraRoute |> Seq.map ExtraHop.ToIRoutingHopInfo |> Seq.toArray
                                     yield Array.append publicPart extraPart
                             | _ -> ()
                     }
-                    |> Seq.head // ?
+                    |> Seq.sortBy (
+                        fun route -> 
+                            route 
+                            |> Array.sumBy (fun hopInfo -> EdgeWeightCaluculation.edgeWeight amount hopInfo))
+                    |> Seq.tryHead
+                    |> Option.defaultValue [||]
                 else
                     directRoute
             if Seq.isEmpty route then
@@ -881,7 +873,7 @@ and internal ActiveChannel =
                 // Final element is final amount, rest are used in hops
                 let cumulativeAmounts = 
                     Array.scan 
-                        (fun runningTotal hopInfo -> 
+                        (fun runningTotal (hopInfo: IRoutingHopInfo) -> 
                             runningTotal + 
                             UtxoCoin.Lightning.EdgeWeightCaluculation.nodeFee 
                                 hopInfo.FeeBaseMSat
@@ -892,14 +884,14 @@ and internal ActiveChannel =
                 
                 let cumulativeCLTVs =
                     Array.scan
-                        (fun runningTotal hopInfo -> 
+                        (fun runningTotal (hopInfo: IRoutingHopInfo) -> 
                             runningTotal + hopInfo.CltvExpiryDelta)
                         finalHop.OutgoingCLTV
                         reversedRouteNotIncludingUs
                     
                 let nonFinalHops =
                     Array.map3
-                        (fun (hopInfo: RoutingHopInfo) cumulativeAmount cumulativeCLTV ->
+                        (fun (hopInfo: IRoutingHopInfo) cumulativeAmount cumulativeCLTV ->
                             {
                                 NodeId=hopInfo.NodeId
                                 ShortChannelId=Some(hopInfo.ShortChannelId)

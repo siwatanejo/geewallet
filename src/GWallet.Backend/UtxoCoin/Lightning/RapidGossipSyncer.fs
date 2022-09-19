@@ -17,6 +17,20 @@ open GWallet.Backend
 open GWallet.Backend.FSharpUtil.UwpHacks
 
 
+/// Information about hop in multi-hop payments
+/// Used in edge cost calculation and onion packet creation.
+/// Cannot reuse RoutingGrpahEdge because route can contain extra hops
+/// through private channel (ExtraHop type)
+type internal IRoutingHopInfo =
+    abstract NodeId: NodeId
+    abstract ShortChannelId: ShortChannelId
+    abstract FeeBaseMSat: LNMoney
+    abstract FeeProportionalMillionths: uint32
+    abstract CltvExpiryDelta: uint32
+    abstract HTLCMaximumMSat: LNMoney option
+    abstract HTLCMinimumMSat: LNMoney
+
+
 type internal RoutingGrpahEdge = 
     {
         Source : NodeId
@@ -27,6 +41,15 @@ type internal RoutingGrpahEdge =
     interface IEdge<NodeId> with
         member this.Source = this.Source
         member this.Target = this.Target
+
+    interface IRoutingHopInfo with
+        override self.NodeId = self.Source
+        override self.ShortChannelId = self.Update.ShortChannelId
+        override self.FeeBaseMSat = self.Update.FeeBaseMSat
+        override self.FeeProportionalMillionths = self.Update.FeeProportionalMillionths
+        override self.CltvExpiryDelta = self.Update.CLTVExpiryDelta.Value |> uint32
+        override self.HTLCMaximumMSat = self.Update.HTLCMaximumMSat
+        override self.HTLCMinimumMSat = self.Update.HTLCMinimumMSat
 
 
 type internal RoutingGraph = ArrayAdjacencyGraph<NodeId, RoutingGrpahEdge>
@@ -66,26 +89,25 @@ module internal EdgeWeightCaluculation =
     let nodeFee (baseFee: LNMoney) (proportionalFee: int64) (paymentAmount: LNMoney) =
         baseFee + LNMoney.Satoshis(decimal(paymentAmount.Satoshi * proportionalFee) / 1000000.0m)
         
-    let edgeFeeCost (amountWithFees: LNMoney) (edge: RoutingGrpahEdge) =
-        let { Update = update } = edge
+    let edgeFeeCost (amountWithFees: LNMoney) (edge: IRoutingHopInfo) =
         let result =
             nodeFee
-                update.FeeBaseMSat 
-                (int64 update.FeeProportionalMillionths)
+                edge.FeeBaseMSat 
+                (int64 edge.FeeProportionalMillionths)
                 amountWithFees
         // We can't have zero fee cost because it causes weight to be 0 regardless of expiry_delta
         LNMoney.Max(result, LNMoney.MilliSatoshis(1))
 
     /// Computes the weight for the given edge
-    let edgeWeight (paymentAmount: LNMoney) (edge: RoutingGrpahEdge) : float =
+    let edgeWeight (paymentAmount: LNMoney) (edge: IRoutingHopInfo) : float =
         let feeCost = float (edgeFeeCost paymentAmount edge).Value
-        let channelCLTVDelta = edge.Update.CLTVExpiryDelta
+        let channelCLTVDelta = edge.CltvExpiryDelta
         let edgeMaxCapacity =
-            edge.Update.HTLCMaximumMSat
+            edge.HTLCMaximumMSat
             |> Option.defaultValue(RoutingHeuristics.CAPACITY_CHANNEL_LOW)
         if edgeMaxCapacity < paymentAmount then
             infinity // chanel capacity is too small, reject edge
-        elif paymentAmount < edge.Update.HTLCMinimumMSat then
+        elif paymentAmount < edge.HTLCMinimumMSat then
             infinity // our payment is too small for the channel, reject edge
         else
             let capFactor =
@@ -95,7 +117,7 @@ module internal EdgeWeightCaluculation =
                         float RoutingHeuristics.CAPACITY_CHANNEL_HIGH.MilliSatoshi)
             let cltvFactor =
                 RoutingHeuristics.normalize(
-                    float channelCLTVDelta.Value,
+                    float channelCLTVDelta,
                     float RoutingHeuristics.CLTV_LOW,
                     float RoutingHeuristics.CLTV_HIGH)
             let factor = 
