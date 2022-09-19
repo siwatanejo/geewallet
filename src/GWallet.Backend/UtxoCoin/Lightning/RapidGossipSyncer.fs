@@ -85,6 +85,8 @@ module internal EdgeWeightCaluculation =
             |> Option.defaultValue(RoutingHeuristics.CAPACITY_CHANNEL_LOW)
         if edgeMaxCapacity < paymentAmount then
             infinity // chanel capacity is too small, reject edge
+        elif paymentAmount < edge.Update.HTLCMinimumMSat then
+            infinity // our payment is too small for the channel, reject edge
         else
             let capFactor =
                 1.0 - RoutingHeuristics.normalize(
