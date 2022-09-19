@@ -227,10 +227,6 @@ module RapidGossipSyncer =
         async {
             use httpClient = new HttpClient()
             
-            if routingState.LastSyncTimestamp <> 0u then
-                // do nothing since incremental sync is not yet implemented
-                return()
-
             let! gossipData =
                 // always use 0 because incremental sync is not yet implemented
                 let timestamp = 0u //routingState.LastSyncTimestamp
