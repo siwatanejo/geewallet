@@ -188,9 +188,9 @@ module RapidGossipSyncer =
                     newUpdates |> Map.iter (fun channelId newUpd ->
                         match tmpUpdates |> Map.tryFind channelId with
                         | Some upd ->
-                            tmpUpdates <- updates |> Map.add channelId (upd.Combine newUpd)
+                            tmpUpdates <- tmpUpdates |> Map.add channelId (upd.Combine newUpd)
                         | None ->
-                            tmpUpdates <- updates |> Map.add channelId newUpd )
+                            tmpUpdates <- tmpUpdates |> Map.add channelId newUpd )
                     tmpUpdates
 
             let baseGraph = AdjacencyGraph<NodeId, RoutingGrpahEdge>()
@@ -283,9 +283,6 @@ module RapidGossipSyncer =
                     let customChannelFlag = lightningReader.ReadByte()
                     let standardChannelFlagMask = 0b11uy
                     let standardChannelFlag = customChannelFlag &&& standardChannelFlagMask
-
-                    if customChannelFlag &&& CustomChannelUpdateFlags.IncrementalUpdate > 0uy then
-                        failwith "We don't support increamental updates yet!"        
 
                     let cltvExpiryDelta =
                         if customChannelFlag &&& CustomChannelUpdateFlags.CltvExpiryDelta > 0uy then
