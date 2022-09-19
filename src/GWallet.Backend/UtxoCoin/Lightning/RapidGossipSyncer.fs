@@ -243,6 +243,9 @@ module RapidGossipSyncer =
                 |> ignore
             RoutingGraphData(announcements, updates, self.LastSyncTimestamp, newBlacklistedChannels, RoutingGraph(baseGraph))
 
+        member self.GetChannelUpdates() =
+            updates
+
     let mutable internal routingState = RoutingGraphData()
 
     let Sync () =
@@ -250,8 +253,7 @@ module RapidGossipSyncer =
             use httpClient = new HttpClient()
             
             let! gossipData =
-                // always use 0 because incremental sync is not yet implemented
-                let timestamp = 0u //routingState.LastSyncTimestamp
+                let timestamp = routingState.LastSyncTimestamp
                 let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" timestamp
                 httpClient.GetByteArrayAsync url
                 |> Async.AwaitTask
@@ -307,11 +309,11 @@ module RapidGossipSyncer =
 
             let updatesCount = lightningReader.ReadUInt32 false
 
-            let defaultCltvExpiryDelta: uint16 = lightningReader.ReadUInt16 false
-            let defaultHtlcMinimumMSat: uint64 = lightningReader.ReadUInt64 false
-            let defaultFeeBaseMSat: uint32 = lightningReader.ReadUInt32 false
+            let defaultCltvExpiryDelta = lightningReader.ReadUInt16 false |> BlockHeightOffset16
+            let defaultHtlcMinimumMSat = lightningReader.ReadUInt64 false |> LNMoney.MilliSatoshis
+            let defaultFeeBaseMSat = lightningReader.ReadUInt32 false |> LNMoney.MilliSatoshis
             let defaultFeeProportionalMillionths: uint32 = lightningReader.ReadUInt32 false
-            let defaultHtlcMaximumMSat: uint64 = lightningReader.ReadUInt64 false
+            let defaultHtlcMaximumMSat = lightningReader.ReadUInt64 false |> LNMoney.MilliSatoshis
 
             let rec readUpdates (remainingCount: uint) (previousShortChannelId: uint64) (updates: Map<ShortChannelId, ChannelUpdates>) =
                 if remainingCount = 0u then
@@ -322,54 +324,88 @@ module RapidGossipSyncer =
                     let standardChannelFlagMask = 0b11uy
                     let standardChannelFlag = customChannelFlag &&& standardChannelFlagMask
 
-                    if customChannelFlag &&& CustomChannelUpdateFlags.IncrementalUpdate > 0uy then
-                        failwith "We don't support increamental updates yet!"
+                    let isIncremental = 
+                        customChannelFlag &&& CustomChannelUpdateFlags.IncrementalUpdate > 0uy
 
                     let cltvExpiryDelta =
                         if customChannelFlag &&& CustomChannelUpdateFlags.CltvExpiryDelta > 0uy then
-                            lightningReader.ReadUInt16 false
+                            lightningReader.ReadUInt16 false |> BlockHeightOffset16 |> Some
                         else
-                            defaultCltvExpiryDelta
+                            None
 
                     let htlcMinimumMSat =
                         if customChannelFlag &&& CustomChannelUpdateFlags.HtlcMinimumMsat > 0uy then
-                            lightningReader.ReadUInt64 false
+                            lightningReader.ReadUInt64 false |> LNMoney.MilliSatoshis |> Some
                         else
-                            defaultHtlcMinimumMSat
+                            None
 
                     let feeBaseMSat =
                         if customChannelFlag &&& CustomChannelUpdateFlags.FeeBaseMsat > 0uy then
-                            lightningReader.ReadUInt32 false
+                            lightningReader.ReadUInt32 false |> LNMoney.MilliSatoshis |> Some
                         else
-                            defaultFeeBaseMSat
+                            None
 
                     let feeProportionalMillionths =
                         if customChannelFlag &&& CustomChannelUpdateFlags.FeeProportionalMillionths > 0uy then
-                            lightningReader.ReadUInt32 false
+                            lightningReader.ReadUInt32 false |> Some
                         else
-                            defaultFeeProportionalMillionths
+                            None
                     
                     let htlcMaximumMSat =
                         if customChannelFlag &&& CustomChannelUpdateFlags.HtlcMaximumMsat > 0uy then
-                            lightningReader.ReadUInt64 false
+                            lightningReader.ReadUInt64 false |> LNMoney.MilliSatoshis |> Some
                         else
-                            defaultHtlcMaximumMSat
+                            None
 
                     let structuredShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
-
+                    
                     let channelUpdate =
-                        {
-                            UnsignedChannelUpdateMsg.ShortChannelId = structuredShortChannelId
-                            Timestamp = backdatedTimestamp
-                            ChainHash = Network.Main.GenesisHash
-                            ChannelFlags = standardChannelFlag
-                            MessageFlags = 1uy
-                            CLTVExpiryDelta = cltvExpiryDelta |> BlockHeightOffset16
-                            HTLCMinimumMSat = htlcMinimumMSat |> LNMoney.MilliSatoshis
-                            FeeBaseMSat = feeBaseMSat |> LNMoney.MilliSatoshis
-                            FeeProportionalMillionths = feeProportionalMillionths 
-                            HTLCMaximumMSat = htlcMaximumMSat |> LNMoney.MilliSatoshis |> Some
-                        }
+                        let baseUpdateOption =
+                            if isIncremental then
+                                match updates |> Map.tryFind structuredShortChannelId with
+                                | Some baseUpdates ->
+                                    let isForward = (standardChannelFlag &&& 1uy) = 0uy
+                                    if isForward then baseUpdates.Forward else baseUpdates.Backward
+                                | None -> 
+#if DEBUG
+                                    Console.WriteLine(SPrintF1 "Could not find base update for channel %A" structuredShortChannelId)
+#endif
+                                    None
+                            else
+                                None
+
+                        match baseUpdateOption with
+                        | Some baseUpdate ->
+                            {
+                                baseUpdate with
+                                    Timestamp = backdatedTimestamp
+                                    CLTVExpiryDelta = cltvExpiryDelta |> Option.defaultValue baseUpdate.CLTVExpiryDelta
+                                    HTLCMinimumMSat = htlcMinimumMSat |> Option.defaultValue baseUpdate.HTLCMinimumMSat
+                                    FeeBaseMSat = feeBaseMSat |> Option.defaultValue baseUpdate.FeeBaseMSat
+                                    FeeProportionalMillionths = 
+                                        feeProportionalMillionths |> Option.defaultValue baseUpdate.FeeProportionalMillionths
+                                    HTLCMaximumMSat = 
+                                        match htlcMaximumMSat with
+                                        | Some _ -> htlcMaximumMSat
+                                        | None -> baseUpdate.HTLCMaximumMSat
+                            } 
+                        | None ->
+                            {
+                                UnsignedChannelUpdateMsg.ShortChannelId = structuredShortChannelId
+                                Timestamp = backdatedTimestamp
+                                ChainHash = Network.Main.GenesisHash
+                                ChannelFlags = standardChannelFlag
+                                MessageFlags = 1uy
+                                CLTVExpiryDelta = cltvExpiryDelta |> Option.defaultValue defaultCltvExpiryDelta
+                                HTLCMinimumMSat = htlcMinimumMSat |> Option.defaultValue defaultHtlcMinimumMSat
+                                FeeBaseMSat = feeBaseMSat |> Option.defaultValue defaultFeeBaseMSat
+                                FeeProportionalMillionths = 
+                                    feeProportionalMillionths |> Option.defaultValue defaultFeeProportionalMillionths
+                                HTLCMaximumMSat = 
+                                    match htlcMaximumMSat with
+                                    | Some _ -> htlcMaximumMSat
+                                    | None -> Some defaultHtlcMaximumMSat
+                            }
 
                     let newUpdates =
                         let oldValue =
@@ -380,7 +416,7 @@ module RapidGossipSyncer =
 
                     readUpdates (remainingCount - 1u) shortChannelId newUpdates
 
-            let updates = readUpdates updatesCount 0UL Map.empty
+            let updates = readUpdates updatesCount 0UL (routingState.GetChannelUpdates())
 
             routingState <- routingState.Update announcements updates lastSeenTimestamp
 
