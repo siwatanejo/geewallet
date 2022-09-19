@@ -698,7 +698,7 @@ and internal ActiveChannel =
             | _ -> return Error <| ExpectedCommitmentSigned channelMsg
     }
 
-    member private self.RecvHtlcFulfillOrFail(onionSharedSecrets: (Key * PubKey) list): Async<Result<ActiveChannel * bool, RecvFulfillOrFailError>> = async {
+    member private self.RecvHtlcFulfillOrFail (hops: Hop[]) (onionSharedSecrets: (Key * PubKey) list): Async<Result<ActiveChannel * bool, RecvFulfillOrFailError>> = async {
         let connectedChannel = self.ConnectedChannel
         let peerNode = connectedChannel.PeerNode
         let channel = connectedChannel.Channel
@@ -776,15 +776,27 @@ and internal ActiveChannel =
                     match activeChannelAfterCommitReceivedRes with
                     | Error err -> return Error <| RecvFulfillOrFailError.RecvCommit err
                     | Ok activeChannelAfterCommitReceived ->
-                        let res = Sphinx.ErrorPacket.TryParse(theirFailMsg.Reason.Data, onionSharedSecrets)
-                        let strRep = SPrintF1 "%A" res
-                        Console.WriteLine("theirFailMsg:")
-                        Console.WriteLine(strRep)
-
                         let! activeChannelAfterCommitSentRes = activeChannelAfterCommitReceived.SendCommit()
                         match activeChannelAfterCommitSentRes with
                         | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
-                        | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, false)
+                        | Ok activeChannelAfterCommitSent -> 
+                            let shpinxErrorPacket = Sphinx.ErrorPacket.TryParse(theirFailMsg.Reason.Data, onionSharedSecrets)
+#if DEBUG
+                            let strRep = SPrintF1 "%A" shpinxErrorPacket
+                            Console.WriteLine("theirFailMsg:")
+                            Console.WriteLine(strRep)
+#endif
+                            match shpinxErrorPacket with
+                            | Ok errorPacket ->
+                                match errorPacket.FailureMsg.Code.Value with
+                                | OnionError.UNKNOWN_NEXT_PEER ->
+                                    let failedHop = hops |> Array.find (fun hop -> hop.NodeId = errorPacket.OriginNode)
+                                    RapidGossipSyncer.BlacklistChannel failedHop.ShortChannelId.Value
+                                    // for now do nothing and let it fail later
+                                | _ -> ()
+                            | _ -> ()
+
+                            return Ok (activeChannelAfterCommitSent, false)
             | :? UpdateFailMalformedHTLCMsg as theirFailMsg ->
                 let channelAfterFailMsgRes =
                     channel.Channel.ApplyUpdateFailMalformedHTLC theirFailMsg
@@ -989,7 +1001,7 @@ and internal ActiveChannel =
         match self.GetHopsAndFinalAmountsForHtlcPayment sourceNode targetNode paymentRequest amount currentBlockHeight with
         | Error err -> return Error err
         | Ok({ Hops = hops; FinalAmount = finalAmount; FinalCltv = expiryBlockHeight }) ->
-
+            
             // Sphinx.PacketAndSecrets.Create expects lists of hop data and node pubKeys 
             // that are in forward order, so we must reverse them
             let onionPacket = self.GetOnionPacketForHtlcPayment sessionKey associatedData (hops |> Array.rev)
@@ -1031,7 +1043,7 @@ and internal ActiveChannel =
                     match activeChannelAfterCommitReceivedRes with
                     | Error err -> return Error <| SendHtlcPaymentError.RecvCommit err
                     | Ok activeChannelAfterCommitReceived when waitForResult ->
-                        let! activeChannelAfterNewCommitRes = activeChannelAfterCommitReceived.RecvHtlcFulfillOrFail(onionPacket.SharedSecrets)
+                        let! activeChannelAfterNewCommitRes = activeChannelAfterCommitReceived.RecvHtlcFulfillOrFail hops onionPacket.SharedSecrets
                         match (activeChannelAfterNewCommitRes) with
                         | Error err ->
                             return Error <| SendHtlcPaymentError.RecvFulfillOrFail err

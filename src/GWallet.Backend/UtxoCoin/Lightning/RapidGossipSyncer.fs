@@ -169,9 +169,10 @@ module RapidGossipSyncer =
     type internal RoutingGraphData private(announcements: Set<CompactAnnouncment>, 
                                            updates: Map<ShortChannelId, ChannelUpdates>,
                                            lastSyncTimestamp: uint32,
+                                           blacklistedChannels: Set<ShortChannelId>,
                                            routingGraph: RoutingGraph) =
         
-        new() = RoutingGraphData(Set.empty, Map.empty, 0u, RoutingGraph(AdjacencyGraph()))
+        new() = RoutingGraphData(Set.empty, Map.empty, 0u, Set.empty, RoutingGraph(AdjacencyGraph()))
 
         member self.LastSyncTimestamp = lastSyncTimestamp
 
@@ -180,7 +181,10 @@ module RapidGossipSyncer =
         member self.Update (newAnnouncements : seq<CompactAnnouncment>) 
                            (newUpdates: Map<ShortChannelId, ChannelUpdates>) 
                            (syncTimestamp: uint32) : RoutingGraphData =
-            let announcements = announcements |> Set.union (newAnnouncements |> Set.ofSeq)
+            let announcements = 
+                announcements 
+                |> Set.union (newAnnouncements |> Set.ofSeq)
+                |> Set.filter (fun ann -> not (blacklistedChannels |> Set.contains ann.ShortChannelId))
             
             let updates =
                 if updates.IsEmpty then
@@ -199,7 +203,7 @@ module RapidGossipSyncer =
 
             for ann in announcements do
                 let updates = updates.[ann.ShortChannelId]
-                
+                    
                 let addEdge source target (upd : UnsignedChannelUpdateMsg) =
                     let edge = { Source = source; Target = target; ShortChannelId = upd.ShortChannelId; Update = upd }
                     baseGraph.AddVerticesAndEdge edge |> ignore
@@ -207,7 +211,15 @@ module RapidGossipSyncer =
                 updates.Forward |> Option.iter (addEdge ann.NodeId1 ann.NodeId2)
                 updates.Backward |> Option.iter (addEdge ann.NodeId2 ann.NodeId1)
 
-            RoutingGraphData(announcements, updates, syncTimestamp, RoutingGraph(baseGraph))
+            RoutingGraphData(announcements, updates, syncTimestamp, blacklistedChannels, RoutingGraph(baseGraph))
+
+        member self.BlacklistChannel(shortChannelId: ShortChannelId) =
+            let newBlacklistedChannels = blacklistedChannels |> Set.add shortChannelId
+            let baseGraph = AdjacencyGraph<NodeId, RoutingGrpahEdge>()
+            baseGraph.AddVerticesAndEdgeRange(
+                self.Graph.Edges |> Seq.filter (fun edge ->  edge.ShortChannelId <> shortChannelId))
+                |> ignore
+            RoutingGraphData(announcements, updates, self.LastSyncTimestamp, newBlacklistedChannels, RoutingGraph(baseGraph))
 
     let mutable internal routingState = RoutingGraphData()
 
@@ -215,6 +227,10 @@ module RapidGossipSyncer =
         async {
             use httpClient = new HttpClient()
             
+            if routingState.LastSyncTimestamp <> 0u then
+                // do nothing since incremental sync is not yet implemented
+                return()
+
             let! gossipData =
                 // always use 0 because incremental sync is not yet implemented
                 let timestamp = 0u //routingState.LastSyncTimestamp
@@ -352,6 +368,9 @@ module RapidGossipSyncer =
 
             return ()
         }
+
+    let internal BlacklistChannel (shortChannelId: ShortChannelId) =
+        routingState <- routingState.BlacklistChannel shortChannelId
     
     /// Get shortest route from source to target node taking cahnnel fees and cltv expiry deltas into account.
     /// Don't use channels that have insufficient capacity for given paymentAmount.
