@@ -264,19 +264,18 @@ module RapidGossipSyncer =
                 return [||]
             else
                 let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" timestamp
-                try 
-                    use httpClient = new HttpClient()
-                    let! data = httpClient.GetByteArrayAsync url |> Async.AwaitTask
+                use httpClient = new HttpClient()
+
+                let! response = httpClient.GetAsync url |> Async.AwaitTask
+                if response.StatusCode = Net.HttpStatusCode.NotFound then
+                    // error 404, most likely no data available
+                    // see https://github.com/lightningdevkit/rapid-gossip-sync-server/issues/16
+                    return [||]
+                else
+                    let! data = response.Content.ReadAsByteArrayAsync()  |> Async.AwaitTask
                     if isFullSync then
                         File.WriteAllBytes(fullSyncFileInfo.FullName, data)
                     return data
-                with
-                | :? AggregateException as aggExn ->
-                    match aggExn.InnerException with
-                    | :? Net.Http.HttpRequestException as exn when exn.Message.Contains "404" ->
-                        // error 404, most likely no data available
-                        return [||]
-                    | _ -> return raise aggExn
         }
 
     let private SyncUsingTimestamp (timestamp: uint32) =
@@ -451,13 +450,15 @@ module RapidGossipSyncer =
             return ()
         }
 
+    let private FullSync() = SyncUsingTimestamp 0u
+    let private IncrementalSync() = SyncUsingTimestamp routingState.LastSyncTimestamp
+
     let Sync() =
         async {
             if routingState.LastSyncTimestamp = 0u then
                 // always do full sync on fresh start
-                do! SyncUsingTimestamp 0u
-            // incremental sync
-            do! SyncUsingTimestamp routingState.LastSyncTimestamp
+                do! FullSync()
+            do! IncrementalSync()
         }
 
     let internal BlacklistChannel (shortChannelId: ShortChannelId) =
