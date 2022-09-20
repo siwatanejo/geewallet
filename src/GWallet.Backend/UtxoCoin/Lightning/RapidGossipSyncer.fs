@@ -248,24 +248,40 @@ module RapidGossipSyncer =
 
     let mutable internal routingState = RoutingGraphData()
 
-    let Sync () =
-        async {
-            use httpClient = new HttpClient()
-            
-            let! gossipData =
-                let timestamp = routingState.LastSyncTimestamp
+    /// Get gossip data either from RGS server, or from cache (if present).
+    /// Only full dumps are cached. If data is received from server, cache is updated.
+    /// Empty array means absence of data
+    let private GetGossipData (timestamp: uint32) : Async<byte[]> =
+        let isFullSync = timestamp = 0u
+        let fullSyncFileInfo = FileInfo(Path.Combine(Config.GetCacheDir().FullName, "rgsFullSyncData.bin"))
+        let twoWeeksAgo = DateTime.UtcNow - TimeSpan.FromDays(14)
+        
+        async { 
+            if isFullSync && fullSyncFileInfo.Exists && fullSyncFileInfo.LastWriteTimeUtc > twoWeeksAgo then
+                return File.ReadAllBytes fullSyncFileInfo.FullName
+            elif timestamp >= uint32 ((DateTime.UtcNow - TimeSpan.FromDays(1)).UnixTimestamp()) then
+                // RGS server is designed to take daily timestamps (00:00 of every day), so no new data is available
+                return [||]
+            else
                 let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" timestamp
-                async {
-                    try 
-                        return! httpClient.GetByteArrayAsync url |> Async.AwaitTask
-                    with
-                    | :? AggregateException as aggExn ->
-                        match aggExn.InnerException with
-                        | :? Net.Http.HttpRequestException as exn when exn.Message.Contains "404" ->
-                            // error 404, most likely no data available
-                            return [||]
-                        | _ -> return raise aggExn
-                }
+                try 
+                    use httpClient = new HttpClient()
+                    let! data = httpClient.GetByteArrayAsync url |> Async.AwaitTask
+                    if isFullSync then
+                        File.WriteAllBytes(fullSyncFileInfo.FullName, data)
+                    return data
+                with
+                | :? AggregateException as aggExn ->
+                    match aggExn.InnerException with
+                    | :? Net.Http.HttpRequestException as exn when exn.Message.Contains "404" ->
+                        // error 404, most likely no data available
+                        return [||]
+                    | _ -> return raise aggExn
+        }
+
+    let private SyncUsingTimestamp (timestamp: uint32) =
+        async {
+            let! gossipData = GetGossipData timestamp
 
             if Array.isEmpty gossipData then
                 return ()
@@ -433,6 +449,15 @@ module RapidGossipSyncer =
             routingState <- routingState.Update announcements updates lastSeenTimestamp
 
             return ()
+        }
+
+    let Sync() =
+        async {
+            if routingState.LastSyncTimestamp = 0u then
+                // always do full sync on fresh start
+                do! SyncUsingTimestamp 0u
+            // incremental sync
+            do! SyncUsingTimestamp routingState.LastSyncTimestamp
         }
 
     let internal BlacklistChannel (shortChannelId: ShortChannelId) =
