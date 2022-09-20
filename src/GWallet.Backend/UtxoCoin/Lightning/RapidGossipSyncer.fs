@@ -254,12 +254,12 @@ module RapidGossipSyncer =
     let private GetGossipData (timestamp: uint32) : Async<byte[]> =
         let isFullSync = timestamp = 0u
         let fullSyncFileInfo = FileInfo(Path.Combine(Config.GetCacheDir().FullName, "rgsFullSyncData.bin"))
-        let twoWeeksAgo = DateTime.UtcNow - TimeSpan.FromDays(14)
+        let twoWeeksAgo = DateTime.UtcNow - TimeSpan.FromDays(14.0)
         
         async { 
             if isFullSync && fullSyncFileInfo.Exists && fullSyncFileInfo.LastWriteTimeUtc > twoWeeksAgo then
                 return File.ReadAllBytes fullSyncFileInfo.FullName
-            elif timestamp >= uint32 ((DateTime.UtcNow - TimeSpan.FromDays(1)).UnixTimestamp()) then
+            elif timestamp >= uint32 ((DateTime.UtcNow - TimeSpan.FromDays(1.0)).UnixTimestamp()) then
                 // RGS server is designed to take daily timestamps (00:00 of every day), so no new data is available
                 return [||]
             else
