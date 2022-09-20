@@ -255,8 +255,20 @@ module RapidGossipSyncer =
             let! gossipData =
                 let timestamp = routingState.LastSyncTimestamp
                 let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" timestamp
-                httpClient.GetByteArrayAsync url
-                |> Async.AwaitTask
+                async {
+                    try 
+                        return! httpClient.GetByteArrayAsync url |> Async.AwaitTask
+                    with
+                    | :? AggregateException as aggExn ->
+                        match aggExn.InnerException with
+                        | :? Net.Http.HttpRequestException as exn when exn.Message.Contains "404" ->
+                            // error 404, most likely no data available
+                            return [||]
+                        | _ -> return raise aggExn
+                }
+
+            if Array.isEmpty gossipData then
+                return ()
 
             use memStream = new MemoryStream(gossipData)
             use lightningReader = new LightningReaderStream(memStream)
