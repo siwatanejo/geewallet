@@ -261,7 +261,7 @@ module RapidGossipSyncer =
                 return File.ReadAllBytes fullSyncFileInfo.FullName
             elif timestamp >= uint32 ((DateTime.UtcNow - TimeSpan.FromDays(1.0)).UnixTimestamp()) then
                 // RGS server is designed to take daily timestamps (00:00 of every day), so no new data is available
-                return [||]
+                return Array.empty
             else
                 let url = SPrintF1 "https://rapidsync.lightningdevkit.org/snapshot/%d" timestamp
                 use httpClient = new HttpClient()
@@ -270,7 +270,7 @@ module RapidGossipSyncer =
                 if response.StatusCode = Net.HttpStatusCode.NotFound then
                     // error 404, most likely no data available
                     // see https://github.com/lightningdevkit/rapid-gossip-sync-server/issues/16
-                    return [||]
+                    return Array.empty
                 else
                     let! data = response.Content.ReadAsByteArrayAsync()  |> Async.AwaitTask
                     if isFullSync then
