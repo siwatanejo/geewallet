@@ -917,7 +917,9 @@ and internal ActiveChannel =
     
     member private self.GetOnionPacketForHtlcPayment sessionKey associatedData hops =
         let hopsData =
+#if DEBUG
             System.Console.WriteLine("TLVS:")
+#endif
             hops
             |> Array.map (fun hop ->
                 let tlvs =
@@ -937,9 +939,11 @@ and internal ActiveChannel =
                                     )
                         | None -> ()
                     |]
+#if DEBUG
                 let stringRep = String.Join("\n", tlvs |> Seq.map (fun each -> each.ToString()))
                 System.Console.WriteLine(stringRep)
                 System.Console.WriteLine()
+#endif
                 (TLVPayload tlvs).ToBytes())
             |> Array.toList
 
@@ -947,9 +951,10 @@ and internal ActiveChannel =
             hops 
             |> Array.map (fun hop -> hop.NodeId.Value) 
             |> Array.toList
+#if DEBUG
         System.Console.WriteLine("PubKeys:")
         for each in pubKeys do System.Console.WriteLine(each.ToString())
-        
+#endif        
         Sphinx.PacketAndSecrets.Create
             (
                 sessionKey, 
