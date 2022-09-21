@@ -26,16 +26,19 @@ type RapidGossipSyncer() =
         // Regression test for sync data deserialization and graph updating
         let fullData, incrementalData = syncData.Force()
 
-        let initialRoutingState = RapidGossipSyncer.GetRoutingState()
-        Assert.AreEqual(initialRoutingState.LastSyncTimestamp, 0u)
-        Assert.AreEqual(initialRoutingState.Graph.EdgeCount, 0)
+        let timestampBeforeSync = RapidGossipSyncer.GetLastSyncTimestamp()
+        let edgeCountBeforeSync = RapidGossipSyncer.GetGraphEdgeCount()
+        Assert.AreEqual(timestampBeforeSync, 0u)
+        Assert.AreEqual(edgeCountBeforeSync, 0)
 
         RapidGossipSyncer.SyncUsingData fullData |> Async.RunSynchronously
-        let routingStateAfterFullSync = RapidGossipSyncer.GetRoutingState()
-        Assert.AreEqual(routingStateAfterFullSync.LastSyncTimestamp, 1663545600u)
-        Assert.AreEqual(routingStateAfterFullSync.Graph.EdgeCount, 175343)
+        let timestampAfterFullSync = RapidGossipSyncer.GetLastSyncTimestamp()
+        let edgeCountAfterFullSync = RapidGossipSyncer.GetGraphEdgeCount()
+        Assert.AreEqual(timestampAfterFullSync, 1663545600u)
+        Assert.AreEqual(edgeCountAfterFullSync, 175343)
 
         RapidGossipSyncer.SyncUsingData incrementalData |> Async.RunSynchronously
-        let routingStateAfterIncrementalSync = RapidGossipSyncer.GetRoutingState()
-        Assert.AreEqual(routingStateAfterIncrementalSync.LastSyncTimestamp, 1663632000u)
-        Assert.AreEqual(routingStateAfterIncrementalSync.Graph.EdgeCount, 176044)
+        let timestampAfterIncrementalSync = RapidGossipSyncer.GetLastSyncTimestamp()
+        let edgeCountAfterIncrementalSync = RapidGossipSyncer.GetGraphEdgeCount()
+        Assert.AreEqual(timestampAfterIncrementalSync, 1663632000u)
+        Assert.AreEqual(edgeCountAfterIncrementalSync, 176044)
