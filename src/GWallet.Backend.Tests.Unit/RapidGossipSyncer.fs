@@ -22,7 +22,7 @@ type RapidGossipSyncer() =
         )
 
     [<Test>]
-    member __.deserialization() =
+    member __.Deserialization() =
         // Regression test for sync data deserialization and graph updating
         let fullData, incrementalData = syncData.Force()
 
