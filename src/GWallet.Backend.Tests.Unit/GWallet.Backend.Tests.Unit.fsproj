@@ -81,6 +81,7 @@
     <Compile Include="ExceptionMarshalling.fs" />
     <Compile Include="ChannelMarshalling.fs" />
     <Compile Include="NOnionEndpoint.fs" />
+    <Compile Include="RapidGossipSyncer.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Chaos.NaCl-Portable">
@@ -98,6 +99,9 @@
     </Reference>
     <Reference Include="nunit.framework">
       <HintPath>..\..\packages\NUnit.2.6.4\lib\nunit.framework.dll</HintPath>
+    </Reference>
+    <Reference Include="QuikGraph">
+      <HintPath>..\..\packages\QuikGraph.2.5.0\lib\net45\QuikGraph.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

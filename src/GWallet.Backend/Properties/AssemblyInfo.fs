@@ -20,5 +20,7 @@ open System.Runtime.InteropServices
 // The following GUID is for the ID of the typelib if this project is exposed to COM
 [<assembly: Guid("96f9b3e5-11f8-4f5f-aadc-51d0d995b3d2")>]
 
+[<assembly: System.Runtime.CompilerServices.InternalsVisibleTo("GWallet.Backend.Tests.Unit")>]
+
 do
     ()
