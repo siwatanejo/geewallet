@@ -9,6 +9,7 @@ open DotNetLightning.Utils
 open DotNetLightning.Serialization
 open DotNetLightning.Serialization.Msgs
 open DotNetLightning.Payment
+open DotNetLightning.Routing
 open ResultUtils.Portability
 
 open GWallet.Backend
@@ -879,7 +880,7 @@ and internal ActiveChannel =
                     Array.scan 
                         (fun runningTotal (hopInfo: IRoutingHopInfo) -> 
                             runningTotal + 
-                            UtxoCoin.Lightning.EdgeWeightCaluculation.nodeFee 
+                            EdgeWeightCaluculation.nodeFee 
                                 hopInfo.FeeBaseMSat
                                 (int64 hopInfo.FeeProportionalMillionths)
                                 runningTotal)
