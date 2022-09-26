@@ -3,6 +3,7 @@
 open System
 open System.Net
 open System.Text.RegularExpressions
+open System.Diagnostics
 
 open NOnion
 open NOnion.Directory
@@ -12,23 +13,53 @@ open GWallet.Backend
 
 
 module internal TorOperations =
-    let GetRandomTorFallbackDirectoryEndPoint() =
+    let GetRandomTorFallbackDirectoryServer() =
         match Caching.Instance.GetServers
             (ServerType.ProtocolServer ServerProtocol.Tor)
             |> Shuffler.Unsort
             |> Seq.tryHead with
-        | Some server ->
-            match server.ServerInfo.ConnectionType.Protocol with
-            | Protocol.Tcp port ->
-                IPEndPoint(IPAddress.Parse server.ServerInfo.NetworkPath, int32 port)
-            | _ -> failwith "Invalid Tor directory. Tor directories must have an IP and port."
+        | Some server -> server
         | None ->
             failwith "Couldn't find any Tor server"
 
     let internal GetTorDirectory(): Async<TorDirectory> =
         async {
             return! FSharpUtil.Retry<TorDirectory, NOnionException>
-                (fun _ -> TorDirectory.Bootstrap (GetRandomTorFallbackDirectoryEndPoint()))
+                (fun _ -> 
+                    let randomServer = GetRandomTorFallbackDirectoryServer()
+                    let endpoint = 
+                        match randomServer.ServerInfo.ConnectionType.Protocol with
+                        | Protocol.Tcp port ->
+                            IPEndPoint(IPAddress.Parse randomServer.ServerInfo.NetworkPath, int32 port)
+                        | _ -> failwith "Invalid Tor directory. Tor directories must have an IP and port."
+                    async {
+                        let stopwatch = Stopwatch()
+                        stopwatch.Start()
+
+                        try
+                            let! directory = TorDirectory.Bootstrap (endpoint)
+                            stopwatch.Stop()
+                            let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = None }
+                            Caching.Instance.SaveServerLastStat 
+                                (fun server -> server = randomServer)
+                                historyFact
+                            return directory
+                        with
+                        | ex ->
+                            stopwatch.Stop()
+                            let exInfo =
+                                {
+                                    TypeFullName = ex.GetType().FullName
+                                    Message = ex.Message
+                                }
+                            let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = Some(exInfo) }
+                            Caching.Instance.SaveServerLastStat 
+                                (fun server -> server = randomServer)
+                                historyFact
+                            return raise <| FSharpUtil.ReRaise ex
+                        
+                    }
+                )
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
 
