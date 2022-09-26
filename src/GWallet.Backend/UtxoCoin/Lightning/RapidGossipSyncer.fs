@@ -103,28 +103,23 @@ module RapidGossipSyncer =
 
             let rec readAnnouncements (remainingCount: uint) 
                                       (previousShortChannelId: uint64) 
-                                      (announcements: List<UnsignedChannelAnnouncementMsg>) =
+                                      (channelDescriptions: List<ChannelDesc>) =
                 if remainingCount = 0u then
-                    announcements
+                    channelDescriptions
                 else
-                    let features = lightningReader.ReadWithLen () |> FeatureBits.CreateUnsafe
+                    let _features = lightningReader.ReadWithLen ()
                     let shortChannelId = previousShortChannelId + lightningReader.ReadBigSize ()
                     let nodeId1 = nodeIds.[lightningReader.ReadBigSize () |> int]
                     let nodeId2 = nodeIds.[lightningReader.ReadBigSize () |> int]
 
-                    let ann =
+                    let desc =
                         {
-                            UnsignedChannelAnnouncementMsg.Features = features
-                            ChainHash = Network.Main.GenesisHash
                             ShortChannelId = shortChannelId |> ShortChannelId.FromUInt64
-                            NodeId1 = nodeId1
-                            NodeId2 = nodeId2
-                            BitcoinKey1 = ComparablePubKey nodeId1.Value
-                            BitcoinKey2 = ComparablePubKey nodeId2.Value
-                            ExcessData = Array.empty
+                            A = nodeId1
+                            B = nodeId2
                         }
 
-                    readAnnouncements (remainingCount - 1u) shortChannelId (ann::announcements)
+                    readAnnouncements (remainingCount - 1u) shortChannelId (desc::channelDescriptions)
 
             let announcements = readAnnouncements announcementsCount 0UL List.Empty
 
@@ -269,7 +264,7 @@ module RapidGossipSyncer =
     /// Don't use channels that have insufficient capacity for given paymentAmount.
     /// See EdgeWeightCaluculation.edgeWeight.
     /// If no routes can be found, return empty sequence.
-    let internal GetRoute (sourceNodeId: NodeId) (targetNodeId: NodeId) (paymentAmount: LNMoney) : seq<RoutingGrpahEdge> =
+    let internal GetRoute (sourceNodeId: NodeId) (targetNodeId: NodeId) (paymentAmount: LNMoney) : seq<RoutingGraphEdge> =
         routingState.GetRoute sourceNodeId targetNodeId paymentAmount
 
     let DebugGetRoute (account: UtxoCoin.NormalUtxoAccount) (nodeAddress: string) (numSatoshis: decimal) =
