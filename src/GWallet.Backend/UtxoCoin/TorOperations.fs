@@ -24,26 +24,31 @@ module internal TorOperations =
         | None ->
             failwith "Couldn't find any Tor server"
 
-    let NewClientWithMeasurment(server:ServerDetails): Async<TorGuard> =
+    let internal GetEndpointForServer(server: ServerDetails): IPEndPoint =
         let endpoint = 
             match server.ServerInfo.ConnectionType.Protocol with
             | Protocol.Tcp port ->
                 IPEndPoint(IPAddress.Parse server.ServerInfo.NetworkPath, int32 port)
             | _ -> failwith "Invalid Tor directory. Tor directories must have an IP and port."
+
+        endpoint
+    let NewClientWithMeasurment(server: ServerDetails): Async<Option<TorGuard>> =
+        let endpoint = GetEndpointForServer server
         async {
             let stopwatch = Stopwatch()
             stopwatch.Start()
 
             try
-                let! torGuard = TorGuard.NewClientAsync(endpoint) |> Async.AwaitTask
+                let! torGuard = TorGuard.NewClient endpoint
                 stopwatch.Stop()
                 let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = None }
                 Caching.Instance.SaveServerLastStat 
                     (fun srv -> srv = server)
                     historyFact
-                return torGuard
+                return Some torGuard
             with
-            | ex ->
+            // TODO: remove thix section after NOnion is fixed.
+            | :? System.Security.Authentication.AuthenticationException as ex ->
                 stopwatch.Stop()
                 let exInfo =
                     {
@@ -54,28 +59,7 @@ module internal TorOperations =
                 Caching.Instance.SaveServerLastStat 
                     (fun srv -> srv = server)
                     historyFact
-                return raise <| FSharpUtil.ReRaise ex 
-        }
-    
-    let BootstrapWithMeasurment(server:ServerDetails): Async<TorDirectory> =
-        let endpoint = 
-            match server.ServerInfo.ConnectionType.Protocol with
-            | Protocol.Tcp port ->
-                IPEndPoint(IPAddress.Parse server.ServerInfo.NetworkPath, int32 port)
-            | _ -> failwith "Invalid Tor directory. Tor directories must have an IP and port."
-        async {
-            let stopwatch = Stopwatch()
-            stopwatch.Start()
-
-            try
-                let! directory = TorDirectory.Bootstrap (endpoint)
-                stopwatch.Stop()
-                let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = None }
-                Caching.Instance.SaveServerLastStat 
-                    (fun srv -> srv = server)
-                    historyFact
-                return directory
-            with
+                return None
             | ex ->
                 stopwatch.Stop()
                 let exInfo =
@@ -90,9 +74,9 @@ module internal TorOperations =
                 return raise <| FSharpUtil.ReRaise ex 
         }
 
-    let GetTorGuardForServer(server:ServerDetails): Async<TorGuard> = 
+    let GetTorGuardForServer(server:ServerDetails): Async<Option<TorGuard>> = 
         async {
-            return! FSharpUtil.Retry<TorGuard, NOnionException, SocketException>
+            return! FSharpUtil.Retry<Option<TorGuard>, NOnionException, SocketException>
                 (fun _ -> 
                     NewClientWithMeasurment server
                 )
@@ -104,7 +88,8 @@ module internal TorOperations =
             return! FSharpUtil.Retry<TorDirectory, NOnionException, SocketException>
                 (fun _ -> 
                     let randomServer = GetRandomTorFallbackDirectoryServer()
-                    BootstrapWithMeasurment(randomServer)
+                    let endpoint = GetEndpointForServer randomServer
+                    TorDirectory.Bootstrap endpoint
                 )
                 Config.TOR_CONNECTION_RETRY_COUNT
         }

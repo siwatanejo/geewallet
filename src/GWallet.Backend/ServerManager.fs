@@ -193,8 +193,8 @@ module ServerManager =
                 yield job  
         }
 
-        let finalJobs = Seq.append jobs torJobs
-        Async.Parallel finalJobs
+        let allJobs = Seq.append jobs torJobs
+        Async.Parallel allJobs
         |> Async.RunSynchronously
         |> ignore<array<unit>>
 
