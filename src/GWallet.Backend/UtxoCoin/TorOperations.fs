@@ -1,6 +1,7 @@
 ﻿namespace GWallet.Backend.UtxoCoin
 
 open System
+open System.IO
 open System.Net
 open System.Text.RegularExpressions
 open System.Diagnostics
@@ -8,14 +9,35 @@ open System.Diagnostics
 open NOnion
 open NOnion.Directory
 open NOnion.Services
+
 open NOnion.Network
+
+open Org.BouncyCastle.Crypto.Parameters
+open Org.BouncyCastle.Crypto.Generators
+open Org.BouncyCastle.Security
 
 open GWallet.Backend
 open System.Net.Sockets
 
 
 module internal TorOperations =
-    let GetRandomTorFallbackDirectoryServer() =
+    let private GetTorServiceKey () =
+        let serviceKeyPath =
+            Path.Combine (Config.GetConfigDirForThisProgram().FullName, "torServiceKey.bin")
+
+        if File.Exists serviceKeyPath then
+            let serviceKeyBytes =
+                File.ReadAllBytes serviceKeyPath
+            Ed25519PrivateKeyParameters(serviceKeyBytes, 0)
+        else
+            let random = SecureRandom()
+            let kpGen = Ed25519KeyPairGenerator()
+            kpGen.Init(Ed25519KeyGenerationParameters random)
+            let masterPrivateKey = kpGen.GenerateKeyPair().Private :?> Ed25519PrivateKeyParameters
+            File.WriteAllBytes(serviceKeyPath, masterPrivateKey.GetEncoded())
+            masterPrivateKey
+
+    let GetRandomTorFallbackDirectoryEndPoint() =
         match Caching.Instance.GetServers
             (ServerType.ProtocolServer ServerProtocol.Tor)
             |> Shuffler.Unsort
@@ -32,6 +54,7 @@ module internal TorOperations =
             | _ -> failwith "Invalid Tor directory. Tor directories must have an IP and port."
 
         endpoint
+
     let NewClientWithMeasurment(server: ServerDetails): Async<Option<TorGuard>> =
         let endpoint = GetEndpointForServer server
         async {
@@ -98,14 +121,14 @@ module internal TorOperations =
         async {
             return! FSharpUtil.Retry<TorServiceHost, NOnionException, SocketException>
                 (fun _ -> async { 
-                    let torHost = TorServiceHost(directory, Config.TOR_CONNECTION_RETRY_COUNT) 
+                    let torHost = TorServiceHost(directory, Config.TOR_DESCRIPTOR_UPLOAD_RETRY_COUNT, Config.TOR_CONNECTION_RETRY_COUNT, GetTorServiceKey() |> Some) 
                     do! torHost.Start()
                     return torHost
                 })
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
 
-    let internal TorConnect directory introductionPoint =
+    let internal TorConnect directory url =
         async {
             return! FSharpUtil.Retry<TorServiceClient, NOnionException, SocketException>
                 (fun _ -> TorServiceClient.Connect directory introductionPoint)
