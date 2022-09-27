@@ -5,6 +5,7 @@ open System.IO
 open System.Linq
 
 open GWallet.Backend.FSharpUtil.UwpHacks
+open GWallet.Backend.UtxoCoin
 
 module ServerManager =
 
@@ -184,7 +185,16 @@ module ServerManager =
                     | None -> ()
                     | Some job -> yield job
         }
-        Async.Parallel jobs
+
+        let torServers = Caching.Instance.GetServers (ServerType.ProtocolServer Tor)
+        let torJobs = seq{
+            for torServer in torServers do
+                let job = TorOperations.GetTorDirctoryForServer(torServer) |> Async.Ignore
+                yield job  
+        }
+
+        //let finalJobs = Seq.append jobs torJobs
+        Async.Parallel torJobs
         |> Async.RunSynchronously
         |> ignore<array<unit>>
 
