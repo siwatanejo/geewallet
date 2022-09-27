@@ -10,6 +10,7 @@ open NOnion.Directory
 open NOnion.Services
 
 open GWallet.Backend
+open System.Net.Sockets
 
 
 module internal TorOperations =
@@ -24,7 +25,7 @@ module internal TorOperations =
 
     let internal GetTorDirectory(): Async<TorDirectory> =
         async {
-            return! FSharpUtil.Retry<TorDirectory, NOnionException>
+            return! FSharpUtil.Retry<TorDirectory, NOnionException, SocketException>
                 (fun _ -> 
                     let randomServer = GetRandomTorFallbackDirectoryServer()
                     let endpoint = 
@@ -65,7 +66,7 @@ module internal TorOperations =
 
     let internal StartTorServiceHost directory =
         async {
-            return! FSharpUtil.Retry<TorServiceHost, NOnionException>
+            return! FSharpUtil.Retry<TorServiceHost, NOnionException, SocketException>
                 (fun _ -> async { 
                     let torHost = TorServiceHost(directory, Config.TOR_CONNECTION_RETRY_COUNT) 
                     do! torHost.Start()
@@ -76,7 +77,7 @@ module internal TorOperations =
 
     let internal TorConnect directory introductionPoint =
         async {
-            return! FSharpUtil.Retry<TorServiceClient, NOnionException>
+            return! FSharpUtil.Retry<TorServiceClient, NOnionException, SocketException>
                 (fun _ -> TorServiceClient.Connect directory introductionPoint)
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
