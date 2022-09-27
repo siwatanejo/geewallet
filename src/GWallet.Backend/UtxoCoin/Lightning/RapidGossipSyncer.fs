@@ -261,11 +261,14 @@ module RapidGossipSyncer =
         routingState <- routingState.BlacklistChannel shortChannelId
     
     /// Get shortest route from source to target node taking cahnnel fees and cltv expiry deltas into account.
-    /// Don't use channels that have insufficient capacity for given paymentAmount.
-    /// See EdgeWeightCaluculation.edgeWeight.
-    /// If no routes can be found, return empty sequence.
-    let internal GetRoute (sourceNodeId: NodeId) (targetNodeId: NodeId) (paymentAmount: LNMoney) : seq<RoutingGraphEdge> =
-        routingState.GetRoute sourceNodeId targetNodeId paymentAmount
+    /// See RoutingGraphData.GetRoute
+    let internal GetRoute 
+        (sourceNodeId: NodeId) 
+        (targetNodeId: NodeId) 
+        (paymentAmount: LNMoney) 
+        (extraHops: DotNetLightning.Payment.ExtraHop list list) 
+        : seq<IRoutingHopInfo> =
+        routingState.GetRoute sourceNodeId targetNodeId paymentAmount extraHops
 
     let DebugGetRoute (account: UtxoCoin.NormalUtxoAccount) (nodeAddress: string) (numSatoshis: decimal) =
         let paymentAmount = LNMoney.Satoshis numSatoshis
@@ -282,7 +285,7 @@ module RapidGossipSyncer =
         let result = 
             match nodeIds |> Seq.tryHead with
             | Some ourNodeId ->
-                GetRoute ourNodeId targetNodeId paymentAmount
+                GetRoute ourNodeId targetNodeId paymentAmount []
             | None -> Seq.empty
         
         if Seq.isEmpty result then
