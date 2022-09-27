@@ -826,7 +826,7 @@ and internal ActiveChannel =
         
         if sourceNode <> targetNode then // Multihop payment
             let route = 
-                RapidGossipSyncer.GetRoute sourceNode targetNode amount paymentRequest.RoutingInfo
+                RapidGossipSyncer.GetRoute sourceNode targetNode amount currentBlockHeight RouteParams.Default paymentRequest.RoutingInfo
                 |> Seq.toArray
             if Seq.isEmpty route then
                 Error(SendHtlcPaymentError.NoRouteFound targetNode)
