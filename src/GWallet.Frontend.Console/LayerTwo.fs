@@ -501,11 +501,6 @@ module LayerTwo =
                     async {
                         use! nodeServer = Lightning.Connection.StartServer channelStore password nodeServerType
 
-                        match Lightning.Network.EndPoint nodeServer with
-                        | EndPointType.Tor endPoint ->
-                            Console.WriteLine(sprintf "This node, connect to it: %s" (endPoint.ToString()))
-                        | _ -> ()
-
                         Console.WriteLine "Waiting for funder to connect..."
                         let! receiveLightningEventRes = Lightning.Network.ReceiveLightningEvent nodeServer channelId
                         match receiveLightningEventRes with
@@ -574,16 +569,18 @@ module LayerTwo =
 
                 UserInteraction.TryWithPasswordAsync tryLock
             else
-                let connectionType = AskConnectionType()
+                let nodeServerType =
+                    match channelInfo.NodeTransportType with
+                    | NodeTransportType.Server nodeServerType ->
+                        nodeServerType
+                    | NodeTransportType.Client _ ->
+                        failwith "BUG: channelInfo.IsFunder returned false but TransportType shows that we're the funder"
 
                 let tryLock password =
                     async {
-                        use! nodeServer = Lightning.Connection.StartServer channelStore password connectionType
-
-                        match Lightning.Network.EndPoint nodeServer with
-                        | EndPointType.Tor endPoint ->
-                            Console.WriteLine(sprintf "This node, connect to it: %s" (endPoint.ToString()))
-                        | _ -> ()
+                        use! nodeServer = Lightning.Connection.StartServer channelStore password nodeServerType
+                        
+                        Console.WriteLine("Waiting for funder to connect...")
 
                         let sublockFundingAsync = Lightning.Network.AcceptLockChannelFunding nodeServer channelId
                         return! lockChannelInternal (Node.Server nodeServer) sublockFundingAsync

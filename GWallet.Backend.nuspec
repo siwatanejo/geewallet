@@ -14,7 +14,7 @@
       <dependency id="FSharp.Core" version="4.7.2" />
       <dependency id="FSharp.Data" version="3.0.0" />
       <dependency id="HtmlAgilityPack" version="1.11.24" />
-      <dependency id="Microsoft.Bcl.AsyncInterfaces" version="5.0.0" />
+      <dependency id="Microsoft.Bcl.AsyncInterfaces" version="6.0.0" />
       <dependency id="Microsoft.Extensions.Logging.Abstractions" version="1.0.2" />
       <dependency id="Microsoft.VisualStudio.Threading" version="16.9.60" />
       <dependency id="Microsoft.VisualStudio.Validation" version="16.8.33" />
@@ -22,7 +22,7 @@
       <dependency id="NBitcoin.Altcoins" version="3.0.8" />
       <dependency id="Nethereum" version="0.95.0--date20210125-0551.git-05a29e9" />
       <dependency id="Newtonsoft.Json" version="12.0.2" />
-      <dependency id="NOnion" version="0.1.0--date20220927-0336.git-b756631" />
+      <dependency id="NOnion" version="0.1.0--date20220929-1206.git-887ac9b" />
       <dependency id="Portable.BouncyCastle" version="1.8.10" />
       <dependency id="SharpRaven" version="2.4.0" />
       <dependency id="StreamJsonRpc" version="2.8.21" />
@@ -49,7 +49,7 @@
       <dependency id="System.Reflection.Primitives" version="4.3.0" />
       <dependency id="System.Resources.ResourceManager" version="4.3.0" />
       <dependency id="System.Runtime" version="4.3.0" />
-      <dependency id="System.Runtime.CompilerServices.Unsafe" version="5.0.0" />
+      <dependency id="System.Runtime.CompilerServices.Unsafe" version="6.0.0" />
       <dependency id="System.Runtime.Extensions" version="4.3.0" />
       <dependency id="System.Runtime.InteropServices" version="4.3.0" />
       <dependency id="System.Threading" version="4.3.0" />
