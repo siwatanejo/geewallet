@@ -189,7 +189,7 @@ module ServerManager =
         let torServers = Caching.Instance.GetServers (ServerType.ProtocolServer Tor)
         let torJobs = seq{
             for torServer in torServers do
-                let job = TorOperations.GetTorDirctoryForServer(torServer) |> Async.Ignore
+                let job = TorOperations.GetTorGuardForServer(torServer) |> Async.Ignore
                 yield job  
         }
 
