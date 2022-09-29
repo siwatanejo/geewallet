@@ -36,16 +36,7 @@ module internal TorOperations =
             let masterPrivateKey = kpGen.GenerateKeyPair().Private :?> Ed25519PrivateKeyParameters
             File.WriteAllBytes(serviceKeyPath, masterPrivateKey.GetEncoded())
             masterPrivateKey
-
-    let GetRandomTorFallbackDirectoryServer() =
-        match Caching.Instance.GetServers
-            (ServerType.ProtocolServer ServerProtocol.Tor)
-            |> Shuffler.Unsort
-            |> Seq.tryHead with
-        | Some server -> server
-        | None ->
-            failwith "Couldn't find any Tor server"
-
+    
     let GetFastestTorFallbackDirectoryServer() =
         match Caching.Instance.GetServers
             (ServerType.ProtocolServer ServerProtocol.Tor)
@@ -124,8 +115,8 @@ module internal TorOperations =
         async {
             return! FSharpUtil.Retry<TorDirectory, NOnionException, SocketException>
                 (fun _ -> 
-                    let randomServer = GetRandomTorFallbackDirectoryServer()
-                    let endpoint = GetEndpointForServer randomServer
+                    let server = GetFastestTorFallbackDirectoryServer()
+                    let endpoint = GetEndpointForServer server
                     TorDirectory.Bootstrap endpoint (Config.GetCacheDir())
                 )
                 Config.TOR_CONNECTION_RETRY_COUNT
