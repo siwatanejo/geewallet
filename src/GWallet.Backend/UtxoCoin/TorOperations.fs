@@ -46,6 +46,20 @@ module internal TorOperations =
         | None ->
             failwith "Couldn't find any Tor server"
 
+    let GetFastestTorFallbackDirectoryServer() =
+        match Caching.Instance.GetServers
+            (ServerType.ProtocolServer ServerProtocol.Tor)
+            |> Seq.sortBy
+                (fun server -> 
+                    match server.CommunicationHistory with
+                    | Some(historyInfo, _) when historyInfo.Status = Status.Success -> 
+                        historyInfo.TimeSpan.TotalMilliseconds
+                    | _ -> infinity )
+            |> Seq.tryHead with
+        | Some server -> server
+        | None ->
+            failwith "Couldn't find any Tor server"
+
     let internal GetEndpointForServer(server: ServerDetails): IPEndPoint =
         let endpoint = 
             match server.ServerInfo.ConnectionType.Protocol with
