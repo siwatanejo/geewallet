@@ -37,7 +37,7 @@ module internal TorOperations =
             File.WriteAllBytes(serviceKeyPath, masterPrivateKey.GetEncoded())
             masterPrivateKey
 
-    let GetRandomTorFallbackDirectoryEndPoint() =
+    let GetRandomTorFallbackDirectoryServer() =
         match Caching.Instance.GetServers
             (ServerType.ProtocolServer ServerProtocol.Tor)
             |> Shuffler.Unsort
@@ -112,7 +112,7 @@ module internal TorOperations =
                 (fun _ -> 
                     let randomServer = GetRandomTorFallbackDirectoryServer()
                     let endpoint = GetEndpointForServer randomServer
-                    TorDirectory.Bootstrap endpoint
+                    TorDirectory.Bootstrap endpoint (Config.GetCacheDir())
                 )
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
@@ -128,7 +128,7 @@ module internal TorOperations =
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
 
-    let internal TorConnect directory url =
+    let internal TorConnect directory introductionPoint =
         async {
             return! FSharpUtil.Retry<TorServiceClient, NOnionException, SocketException>
                 (fun _ -> TorServiceClient.Connect directory introductionPoint)
