@@ -71,18 +71,6 @@ module internal TorOperations =
                 return Some torGuard
             with
             // TODO: remove thix section after NOnion is fixed.
-            | :? System.Security.Authentication.AuthenticationException as ex ->
-                stopwatch.Stop()
-                let exInfo =
-                    {
-                        TypeFullName = ex.GetType().FullName
-                        Message = ex.Message
-                    }
-                let historyFact = { TimeSpan = stopwatch.Elapsed; Fault = Some(exInfo) }
-                Caching.Instance.SaveServerLastStat 
-                    (fun srv -> srv = server)
-                    historyFact
-                return None
             | ex ->
                 stopwatch.Stop()
                 let exInfo =
@@ -94,7 +82,19 @@ module internal TorOperations =
                 Caching.Instance.SaveServerLastStat 
                     (fun srv -> srv = server)
                     historyFact
-                return raise <| FSharpUtil.ReRaise ex 
+                match FSharpUtil.FindException<System.Security.Authentication.AuthenticationException> ex with
+                | Some _authEx -> 
+                    return None
+                | None -> 
+                    match FSharpUtil.FindException<NOnion.GuardConnectionFailedException> ex with
+                    | Some _guardConnFailedEx ->
+                        return None
+                    | None ->
+                        match FSharpUtil.FindException<NOnion.TimeoutErrorException> ex with
+                        | Some _timeoutEx ->
+                            return None
+                        | None ->
+                            return raise <| FSharpUtil.ReRaise ex 
         }
 
     let GetTorGuardForServer(server:ServerDetails): Async<Option<TorGuard>> = 
