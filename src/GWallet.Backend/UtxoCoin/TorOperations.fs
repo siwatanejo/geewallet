@@ -110,9 +110,12 @@ module internal TorOperations =
         async {
             return! FSharpUtil.Retry<TorDirectory, NOnionException, SocketException>
                 (fun _ -> 
-                    let server = GetFastestTorFallbackDirectoryServer()
-                    let endpoint = GetEndpointForServer server
-                    TorDirectory.Bootstrap endpoint (Config.GetCacheDir())
+                    async {
+                        let server = GetFastestTorFallbackDirectoryServer()
+                        match! NewClientWithMeasurment server with
+                        | Some guard -> return! TorDirectory.BootstrapWithGuard guard (Config.GetCacheDir())
+                        | None -> return raise (NOnionException "NewClientWithMeasurment returned None")
+                    }
                 )
                 Config.TOR_CONNECTION_RETRY_COUNT
         }
