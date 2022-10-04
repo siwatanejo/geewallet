@@ -112,7 +112,8 @@ module internal TorOperations =
                 (fun _ -> 
                     async {
                         let server = GetFastestTorFallbackDirectoryServer()
-                        match! NewClientWithMeasurment server with
+                        let! maybeGuard = NewClientWithMeasurment server
+                        match maybeGuard with
                         | Some guard -> return! TorDirectory.BootstrapWithGuard guard (Config.GetCacheDir())
                         | None -> return raise (NOnionException "NewClientWithMeasurment returned None")
                     }
