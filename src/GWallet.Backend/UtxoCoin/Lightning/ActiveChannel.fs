@@ -902,8 +902,8 @@ and internal ActiveChannel =
                         | None -> ()
                     |]
                 
-                let stringRep = String.Join("\n", tlvs |> Seq.map (fun each -> each.ToString()))
-                Infrastructure.LogDebug (stringRep + "\n")
+                let tlvsStringRepresentation = String.Join("\n", tlvs |> Seq.map (fun each -> each.ToString()))
+                Infrastructure.LogDebug (tlvsStringRepresentation + "\n")
 
                 (TLVPayload tlvs).ToBytes())
             |> Array.toList
