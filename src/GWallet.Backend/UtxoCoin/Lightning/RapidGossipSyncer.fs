@@ -183,10 +183,9 @@ module RapidGossipSyncer =
                                         let isForward = (standardChannelFlag &&& 1uy) = 0uy
                                         if isForward then baseUpdates.Forward else baseUpdates.Backward
                                     | None -> 
-    #if DEBUG
                                         Infrastructure.LogDebug
                                             <| SPrintF1 "Could not find base update for channel %A" structuredShortChannelId
-    #endif
+                                        
                                         None
                                 else
                                     None
@@ -308,10 +307,10 @@ module RapidGossipSyncer =
         if Seq.isEmpty result then
             Console.WriteLine("Could not find route to " + nodeAddress)
         else
-            Console.WriteLine("Shortest route to " + nodeAddress)
+            Infrastructure.LogDebug("Shortest route to " + nodeAddress)
             for edge in result do
-                Console.WriteLine(SPrintF1 "%A" edge)
-                Console.WriteLine(
+                Infrastructure.LogDebug(SPrintF1 "%A" edge)
+                Infrastructure.LogDebug(
                     SPrintF1 
                         "Weight: %f" 
                         (EdgeWeightCaluculation.edgeWeight paymentAmount currentBlockHeight routeParams edge))
