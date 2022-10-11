@@ -728,7 +728,7 @@ and internal ActiveChannel =
                         | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
                         | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, true)
             | :? UpdateFailHTLCMsg as theirFailMsg ->
-                System.Console.WriteLine(SPrintF1 "*** theirFailMsg = %A" theirFailMsg)
+                Infrastructure.LogDebug(SPrintF1 "*** theirFailMsg = %A" theirFailMsg)
                 let channelAfterFailMsgRes =
                     channel.Channel.ApplyUpdateFailHTLC theirFailMsg
                 match channelAfterFailMsgRes with
@@ -762,8 +762,8 @@ and internal ActiveChannel =
                             let shpinxErrorPacket = Sphinx.ErrorPacket.TryParse(theirFailMsg.Reason.Data, onionSharedSecrets)
 #if DEBUG
                             let strRep = SPrintF1 "%A" shpinxErrorPacket
-                            Console.WriteLine("theirFailMsg:")
-                            Console.WriteLine(strRep)
+                            Infrastructure.LogDebug "theirFailMsg:"
+                            Infrastructure.LogDebug strRep
 #endif
                             match shpinxErrorPacket with
                             | Ok errorPacket ->
@@ -886,7 +886,7 @@ and internal ActiveChannel =
     member private self.GetOnionPacketForHtlcPayment sessionKey associatedData hops =
         let hopsData =
 #if DEBUG
-            System.Console.WriteLine("TLVS:")
+            Infrastructure.LogDebug "TLVS:"
 #endif
             hops
             |> Array.map (fun hop ->
@@ -909,8 +909,7 @@ and internal ActiveChannel =
                     |]
 #if DEBUG
                 let stringRep = String.Join("\n", tlvs |> Seq.map (fun each -> each.ToString()))
-                System.Console.WriteLine(stringRep)
-                System.Console.WriteLine()
+                Infrastructure.LogDebug (stringRep + "\n")
 #endif
                 (TLVPayload tlvs).ToBytes())
             |> Array.toList
@@ -920,8 +919,8 @@ and internal ActiveChannel =
             |> Array.map (fun hop -> hop.NodeId.Value) 
             |> Array.toList
 #if DEBUG
-        System.Console.WriteLine("PubKeys:")
-        for each in pubKeys do System.Console.WriteLine(each.ToString())
+        Infrastructure.LogDebug "PubKeys:"
+        for each in pubKeys do Infrastructure.LogDebug(each.ToString())
 #endif        
         Sphinx.PacketAndSecrets.Create
             (
