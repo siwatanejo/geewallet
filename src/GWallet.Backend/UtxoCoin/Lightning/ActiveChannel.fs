@@ -728,7 +728,7 @@ and internal ActiveChannel =
                         | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
                         | Ok activeChannelAfterCommitSent -> return Ok (activeChannelAfterCommitSent, true)
             | :? UpdateFailHTLCMsg as theirFailMsg ->
-                System.Console.WriteLine(SPrintF1 "*** theirFailMsg = %A" theirFailMsg)
+                Infrastructure.LogDebug(SPrintF1 "HTLC payment failed, HTLCUpdateFail received, theirFailMsg = %A" theirFailMsg)
                 let channelAfterFailMsgRes =
                     channel.Channel.ApplyUpdateFailHTLC theirFailMsg
                 match channelAfterFailMsgRes with
@@ -760,11 +760,7 @@ and internal ActiveChannel =
                         | Error err -> return Error <| RecvFulfillOrFailError.SendCommit err
                         | Ok activeChannelAfterCommitSent -> 
                             let shpinxErrorPacket = Sphinx.ErrorPacket.TryParse(theirFailMsg.Reason.Data, onionSharedSecrets)
-#if DEBUG
-                            let strRep = SPrintF1 "%A" shpinxErrorPacket
-                            Console.WriteLine("theirFailMsg:")
-                            Console.WriteLine(strRep)
-#endif
+                            Infrastructure.LogDebug(SPrintF1 "theirFailMsg:\n%A" shpinxErrorPacket)
                             match shpinxErrorPacket with
                             | Ok errorPacket ->
                                 match errorPacket.FailureMsg.Code.Value with
@@ -885,7 +881,7 @@ and internal ActiveChannel =
     
     member private self.GetOnionPacketForHtlcPayment sessionKey associatedData hops =
         let hopsData =
-            System.Console.WriteLine("TLVS:")
+            Infrastructure.LogDebug "TLVS:"
             hops
             |> Array.map (fun hop ->
                 let tlvs =
@@ -905,9 +901,10 @@ and internal ActiveChannel =
                                     )
                         | None -> ()
                     |]
-                let stringRep = String.Join("\n", tlvs |> Seq.map (fun each -> each.ToString()))
-                System.Console.WriteLine(stringRep)
-                System.Console.WriteLine()
+                
+                let tlvsStringRepresentation = String.Join("\n", tlvs |> Seq.map (fun each -> each.ToString()))
+                Infrastructure.LogDebug (tlvsStringRepresentation + "\n")
+
                 (TLVPayload tlvs).ToBytes())
             |> Array.toList
 
@@ -915,9 +912,10 @@ and internal ActiveChannel =
             hops 
             |> Array.map (fun hop -> hop.NodeId.Value) 
             |> Array.toList
-        System.Console.WriteLine("PubKeys:")
-        for each in pubKeys do System.Console.WriteLine(each.ToString())
         
+        Infrastructure.LogDebug "PubKeys:"
+        for each in pubKeys do Infrastructure.LogDebug(each.ToString())
+              
         Sphinx.PacketAndSecrets.Create
             (
                 sessionKey, 
