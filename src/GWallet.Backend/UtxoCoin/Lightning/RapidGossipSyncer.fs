@@ -273,11 +273,11 @@ module RapidGossipSyncer =
         routingState.GetRoute sourceNodeId targetNodeId paymentAmount currentBlockHeight routeParams extraHops
 
 
-[<Obsolete>]
+[<Obsolete("Gossip queries were replaced by RGS (see RapidGossipSyncer)")>]
 module GossipQueries =
     exception RoutingQueryException of string
 
-    [<Obsolete>]
+    [<Obsolete("Gossip queries were replaced by RGS (see RapidGossipSyncer)")>]
     let internal QueryRoutingGossip (currency: Currency) (nodeIdentifier: NodeIdentifier) : Async<seq<IRoutingMsg>> =
         async {
             let firstBlocknum = 0u
