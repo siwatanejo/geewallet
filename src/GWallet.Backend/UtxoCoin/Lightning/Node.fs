@@ -371,6 +371,9 @@ type NodeClient internal (channelStore: ChannelStore, nodeMasterPrivKey: NodeMas
                 (activeChannel :> IDisposable).Dispose()
                 return Ok ()
         }
+    
+    member internal self.ConnectReestablish (channelId: ChannelIdentifier) = 
+        ActiveChannel.ConnectReestablish self.ChannelStore nodeMasterPrivKey channelId None
 
 
 type NodeServer internal (channelStore: ChannelStore, transportListener: TransportListener) =
