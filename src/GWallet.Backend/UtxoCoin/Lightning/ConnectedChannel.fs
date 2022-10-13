@@ -20,6 +20,8 @@ type internal ReestablishError =
     | PeerErrorResponse of PeerNode * PeerErrorMessage
     | ExpectedReestablishMsg of ILightningMsg
     | ExpectedReestablishOrFundingLockedMsg of ILightningMsg
+    | WrongChannelId of given: ChannelId * expected: ChannelId
+    | WrongDataLossProtect
     interface IErrorMsg with
         member self.Message =
             match self with
@@ -31,6 +33,10 @@ type internal ReestablishError =
                 SPrintF1 "Expected channel_reestablish, got %A" (msg.GetType())
             | ExpectedReestablishOrFundingLockedMsg msg ->
                 SPrintF1 "Expected channel_reestablish or funding_locked, got %A" (msg.GetType())
+            | WrongChannelId (given, expected) ->
+                SPrintF2 "Wrong channel_id. Expected: %A, given: %A" expected.Value given.Value
+            | WrongDataLossProtect -> 
+                "Wrong data loss protect values"
         member self.ChannelBreakdown: bool =
             match self with
             | RecvReestablish recvMsgError ->
@@ -38,6 +44,8 @@ type internal ReestablishError =
             | PeerErrorResponse _ -> true
             | ExpectedReestablishMsg _ -> false
             | ExpectedReestablishOrFundingLockedMsg _ -> false
+            | WrongChannelId _ -> false
+            | WrongDataLossProtect -> true
 
     member internal self.PossibleBug =
         match self with
@@ -45,6 +53,8 @@ type internal ReestablishError =
         | PeerErrorResponse _
         | ExpectedReestablishMsg _
         | ExpectedReestablishOrFundingLockedMsg _ -> false
+        | WrongChannelId _ -> false
+        | WrongDataLossProtect -> false
 
 type internal ReconnectError =
     | Connect of ConnectError
@@ -135,7 +145,7 @@ type internal ConnectedChannel =
         }
         match reestablishRes with
         | Error err -> return Error err
-        | Ok (peerNodeAfterReestablishReceived, _theirReestablishMsg) ->
+        | Ok (peerNodeAfterReestablishReceived, theirReestablishMsg) ->
             // TODO: check their reestablish msg
             //
             // A channel_reestablish message contains the channel ID as well as
@@ -145,8 +155,57 @@ type internal ConnectedChannel =
             // commitments. Aside from checking the channel ID this is the sort of
             // thing that should be handled by DNL, except DNL doesn't have an
             // ApplyChannelReestablish command.
-            return Ok (peerNodeAfterReestablishReceived, channel)
-    }
+            if theirReestablishMsg.ChannelId <> channelId.DnlChannelId then
+                return Error <| WrongChannelId(theirReestablishMsg.ChannelId, channelId.DnlChannelId)
+            else
+                if ourReestablishMsg.NextCommitmentNumber = CommitmentNumber UInt48.One 
+                    && theirReestablishMsg.NextCommitmentNumber = CommitmentNumber UInt48.One then
+                    // MUST retransmit channel_ready
+                    // -- we don't even have channel_ready in DNL
+                    return failwith "???"
+
+                let channelState = channel.Channel.SavedChannelState
+                // if next_commitment_number is equal to the commitment number of the 
+                // last commitment_signed message the receiving node has sent
+                if theirReestablishMsg.NextCommitmentNumber = channelState.LocalCommit.Index then // ?
+                    ()
+                    // MUST reuse the same commitment number for its next commitment_signed
+                
+                // if next_revocation_number is equal to the commitment number of the last revoke_and_ack the receiving node sent, 
+                // AND the receiving node hasn't already received a closing_signed -- how to know that?
+                if theirReestablishMsg.NextRevocationNumber = channelState.LocalCommit.Index.PreviousCommitment() then // ?
+                    // MUST re-send the revoke_and_ack.
+                    // if it has previously sent a commitment_signed that needs to be retransmitted:
+                    //     MUST retransmit revoke_and_ack and commitment_signed in the same relative order as initially transmitted.
+                    ()
+                elif theirReestablishMsg.NextRevocationNumber.NextCommitment() <> channelState.LocalCommit.Index.PreviousCommitment() then // ?
+                    // SHOULD send an error and fail the channel
+                    ()
+                // if it (our node) has not sent revoke_and_ack, AND next_revocation_number is not equal to 0:
+                elif channelState.LocalChanges.ACKed.IsEmpty && channelState.LocalCommit.Index <> CommitmentNumber UInt48.Zero then
+                    // SHOULD send an error and fail the channel
+                    ()
+
+                match theirReestablishMsg.DataLossProtect with
+                | Some dataLossProtect ->
+                    if theirReestablishMsg.NextRevocationNumber > channelState.LocalCommit.Index.PreviousCommitment() // ?
+                       && (dataLossProtect.YourLastPerCommitmentSecret =
+                            channelState
+                               .RemotePerCommitmentSecrets
+                               .GetPerCommitmentSecret(theirReestablishMsg.NextRevocationNumber.PreviousCommitment())) then
+                        // SHOULD store my_current_per_commitment_point to retrieve funds
+                        // should the sending node broadcast its commitment transaction on-chain.
+                        // -- how?
+
+                        // SHOULD send an error to request the peer to fail the channel.
+                        // -- how to name that error?
+                        //return Error <| ReestablishError.
+                        return failwith ""
+                    else
+                        // SHOULD send an error and fail the channel.
+                        return Error <| WrongDataLossProtect
+                | None -> 
+                    return Ok(peerNodeAfterReestablishReceived, channel)    }
 
     static member internal ConnectFromWallet (channelStore: ChannelStore)
                                              (nodeMasterPrivKey: NodeMasterPrivKey)
