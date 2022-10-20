@@ -158,17 +158,8 @@ type internal ConnectedChannel =
             else
                 if ourReestablishMsg.NextCommitmentNumber = CommitmentNumber.FirstCommitment.NextCommitment()
                     && theirReestablishMsg.NextCommitmentNumber = CommitmentNumber.FirstCommitment.NextCommitment() then
-                    // MUST retransmit channel_ready
-                    let channelReadyMsg = 
-                        let nextPerCommitmentPoint =
-                            // ?
-                            channel.Channel.ChannelPrivKeys.CommitmentSeed.LastPerCommitmentSecret().PerCommitmentPoint()
-                        { 
-                            FundingLockedMsg.ChannelId = channel.ChannelId.DnlChannelId
-                            NextPerCommitmentPoint = nextPerCommitmentPoint
-                        }
-                    let! peerNodeAfterChannelReadySent = peerNodeAfterReestablishReceived.SendMsg channelReadyMsg
-                    return Ok(peerNodeAfterChannelReadySent, channel)
+                    // ?
+                    return Ok(peerNodeAfterReestablishReceived, channel)
                 else
                     match channel.Channel.ApplyChannelReestablish theirReestablishMsg with
                     | Ok(messages, channelAfterApplyReestablish) ->
