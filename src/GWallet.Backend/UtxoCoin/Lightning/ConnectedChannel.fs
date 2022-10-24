@@ -171,8 +171,6 @@ type internal ConnectedChannel =
                         return Ok(peerNodeAfterReestablishSent, { channel with Channel = channelAfterApplyReestablish })
                     | Ok(messages, channelAfterApplyReestablish) ->
                         let channel = { channel with Channel = channelAfterApplyReestablish }
-                        // TODO: wait for reply and process a reply after sending messages
-                        // possible messages: IUpdateMsg, RevokeAndACKMsg, CommitmentSignedMsg
                         
                         let rec sendMessages (peerNode: PeerNode) remainingMessages =
                             async {
@@ -184,47 +182,74 @@ type internal ConnectedChannel =
                             }
                         let! peerNodeAfterMessagesSent = sendMessages peerNodeAfterReestablishReceived messages
 
-                        let processReply (peerNode: PeerNode) : Async<Result<Channel * PeerNode, ReestablishError>> =
+                        // Wait for reply and process a reply after sending messages
+                        // possible messages: IUpdateMsg, RevokeAndACKMsg, CommitmentSignedMsg
+                        let processReply (channel: Channel) (peerNode: PeerNode) : Async<Result<Channel * PeerNode, ReestablishError>> =
                             async {
                                 let! nextMsg = peerNode.RecvChannelMsg()
-                                return 
-                                    match nextMsg with
-                                    //| Ok(newPeerNode, (:? UpdateAddHTLCMsg as updateAddHtlcMsg)) -> 
-                                    //    channel.Channel.ApplyUpdateAddHTLC updateAddHtlcMsg 
-                                    | Ok(newPeerNode, (:? UpdateFailHTLCMsg as updateFailHtlcMsg)) -> 
-                                        match channel.Channel.ApplyUpdateFailHTLC updateFailHtlcMsg with
+                                match nextMsg with
+                                | Ok(newPeerNode, (:? UpdateAddHTLCMsg as updateAddHtlcMsg)) -> 
+                                    let! blockHeightResponse =
+                                            Server.Query Currency.BTC
+                                                (QuerySettings.Default ServerSelectionMode.Fast)
+                                                (ElectrumClient.SubscribeHeaders ())
+                                                None
+                                    let blockHeight = (blockHeightResponse.Height |> uint32) |> BlockHeight
+                                    return 
+                                        match channel.ApplyUpdateAddHTLC updateAddHtlcMsg blockHeight with
                                         | Ok chan -> Ok(chan, newPeerNode)
                                         | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                    | Ok(newPeerNode, (:? UpdateFailMalformedHTLCMsg as updateFailMalformedHtlcMsg)) ->
-                                        match channel.Channel.ApplyUpdateFailMalformedHTLC updateFailMalformedHtlcMsg with
+                                | Ok(newPeerNode, (:? UpdateFailHTLCMsg as updateFailHtlcMsg)) -> 
+                                    return
+                                        match channel.ApplyUpdateFailHTLC updateFailHtlcMsg with
                                         | Ok chan -> Ok(chan, newPeerNode)
                                         | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                    | Ok(newPeerNode, (:? UpdateFulfillHTLCMsg as updateFulfillHtlcMsg)) ->
-                                        match channel.Channel.ApplyUpdateFulfillHTLC updateFulfillHtlcMsg with
+                                | Ok(newPeerNode, (:? UpdateFailMalformedHTLCMsg as updateFailMalformedHtlcMsg)) ->
+                                    return 
+                                        match channel.ApplyUpdateFailMalformedHTLC updateFailMalformedHtlcMsg with
                                         | Ok chan -> Ok(chan, newPeerNode)
                                         | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                    | Ok(newPeerNode, (:? RevokeAndACKMsg as revokeAndAckMsg)) ->
-                                        match channel.Channel.ApplyRevokeAndACK revokeAndAckMsg with
+                                | Ok(newPeerNode, (:? UpdateFulfillHTLCMsg as updateFulfillHtlcMsg)) ->
+                                    return
+                                        match channel.ApplyUpdateFulfillHTLC updateFulfillHtlcMsg with
                                         | Ok chan -> Ok(chan, newPeerNode)
                                         | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                    | Ok(newPeerNode, (:? CommitmentSignedMsg as commitmentSignedMsg)) ->
-                                        match channel.Channel.ApplyCommitmentSigned commitmentSignedMsg with
-                                        | Ok(chan, revokeAndAckMsg) -> 
-                                            // send revokeAndAckMsg ?
-                                            Ok(chan, newPeerNode)
+                                | Ok(newPeerNode, (:? RevokeAndACKMsg as revokeAndAckMsg)) ->
+                                    return
+                                        match channel.ApplyRevokeAndACK revokeAndAckMsg with
+                                        | Ok chan -> Ok(chan, newPeerNode)
                                         | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                    | Error recvChannelMsgError -> 
+                                | Ok(newPeerNode, (:? CommitmentSignedMsg as commitmentSignedMsg)) ->
+                                    match channel.ApplyCommitmentSigned commitmentSignedMsg with
+                                    | Ok(chan, revokeAndAckMsg) -> 
+                                        let! newPeerNode = newPeerNode.SendMsg revokeAndAckMsg
+                                        return Ok(chan, newPeerNode)
+                                    | Error channelError -> return Error <| ReestablishError.ChannelError channelError
+                                | Error recvChannelMsgError -> 
+                                    return
                                         match recvChannelMsgError with
                                         | RecvChannelMsgError.RecvMsg recvMsg -> 
                                             Error <| ReestablishError.RecvReestablish recvMsg
                                         | RecvChannelMsgError.ReceivedPeerErrorMessage(newPeerNode, peerErrorMsg) -> 
                                             Error <| ReestablishError.PeerErrorResponse(newPeerNode, peerErrorMsg)
-                                    | _ -> failwith "not expected"
+                                | _ -> return failwith "not expected"
                             }
                         
-                        // TODO: process possible replies
+                        let timeout = 1000 // in ms
+                        let rec processReplies (channel: Channel) (peerNode: PeerNode) =
+                            async {
+                                let! reply = processReply channel peerNode |> Async.withTimeout timeout
+                                match reply with
+                                | Some(Ok(newChannel, newPeerNode)) -> 
+                                    return! processReplies newChannel newPeerNode
+                                | Some(Error _ as err) -> return err
+                                | None -> return Ok(channel, peerNode)
+                            }
 
-                        return Ok(peerNodeAfterMessagesSent, channel)
+                        let! processRepliesResult = processReplies channel.Channel peerNodeAfterMessagesSent
+                        match processRepliesResult with
+                        | Ok(chan, peerNode) -> return Ok(peerNode, { channel with Channel = chan })
+                        | Error err -> return Error err
                     | Error(ChannelError.OutOfSync _msg) ->
                         return Error <| OutOfSync
                     | Error(ChannelError.OutOfSyncLocalLateProven(_msg, _currentPerCommitmentPoint)) ->
