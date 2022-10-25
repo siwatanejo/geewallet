@@ -250,14 +250,26 @@ type internal ConnectedChannel =
                         match processRepliesResult with
                         | Ok(chan, peerNode) -> return Ok(peerNode, { channel with Channel = chan })
                         | Error err -> return Error err
-                    | Error(ChannelError.OutOfSync _msg) ->
+                    | Error(ChannelError.OutOfSync msg) ->
+                        Infrastructure.LogError msg
                         return Error <| OutOfSync
-                    | Error(ChannelError.OutOfSyncLocalLateProven(_msg, _currentPerCommitmentPoint)) ->
+                    | Error(ChannelError.OutOfSyncLocalLateProven(msg, currentPerCommitmentPoint)) ->
                         // SHOULD store my_current_per_commitment_point to retrieve funds 
                         // should the sending node broadcast its commitment transaction on-chain
-                        // -- where to store it?
-                        return Error <| OutOfSync
-                    | Error(ChannelError.OutOfSyncRemoteLying _msg) ->
+                        Infrastructure.LogError msg
+                        let channelWithPerCommitmentPointSaved = 
+                            { 
+                                channel with 
+                                    Channel = 
+                                    { 
+                                        channel.Channel with 
+                                            SavedCurrentPerCommitmentPoint = Some currentPerCommitmentPoint 
+                                    } 
+                            }
+                        // -- is returning Ok the way to go?
+                        return Ok(peerNodeAfterReestablishReceived, channelWithPerCommitmentPointSaved)
+                    | Error(ChannelError.OutOfSyncRemoteLying msg) ->
+                        Infrastructure.LogError msg
                         return Error <| WrongDataLossProtect
                     | Error _ -> return failwith "unreachable"
     }
