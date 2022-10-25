@@ -252,6 +252,7 @@ type internal ConnectedChannel =
                         | Error err -> return Error err
                     | Error(ChannelError.OutOfSync msg) ->
                         Infrastructure.LogError msg
+                        do! peerNodeAfterReestablishReceived.SendError msg (Some channelId.DnlChannelId) |> Async.Ignore
                         return Error <| OutOfSync
                     | Error(ChannelError.OutOfSyncLocalLateProven(msg, currentPerCommitmentPoint)) ->
                         // SHOULD store my_current_per_commitment_point to retrieve funds 
@@ -266,10 +267,13 @@ type internal ConnectedChannel =
                                             SavedCurrentPerCommitmentPoint = Some currentPerCommitmentPoint 
                                     } 
                             }
+                        let! peerNodeAfterErrorSent = 
+                            peerNodeAfterReestablishReceived.SendError msg (Some channelId.DnlChannelId)
                         // -- is returning Ok the way to go?
-                        return Ok(peerNodeAfterReestablishReceived, channelWithPerCommitmentPointSaved)
+                        return Ok(peerNodeAfterErrorSent, channelWithPerCommitmentPointSaved)
                     | Error(ChannelError.OutOfSyncRemoteLying msg) ->
                         Infrastructure.LogError msg
+                        do! peerNodeAfterReestablishReceived.SendError msg (Some channelId.DnlChannelId) |> Async.Ignore
                         return Error <| WrongDataLossProtect
                     | Error _ -> return failwith "unreachable"
     }
