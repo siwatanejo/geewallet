@@ -258,14 +258,18 @@ type internal ConnectedChannel =
                         // SHOULD store my_current_per_commitment_point to retrieve funds 
                         // should the sending node broadcast its commitment transaction on-chain
                         Infrastructure.LogError msg
+                        let newSavedChannelState = 
+                            { 
+                                channel.Channel.SavedChannelState with 
+                                    SavedCurrentPerCommitmentPoint = Some currentPerCommitmentPoint 
+                            }
                         let channelWithPerCommitmentPointSaved = 
                             { 
                                 channel with 
                                     Channel = 
                                     { 
-                                        channel.Channel with 
-                                            SavedCurrentPerCommitmentPoint = Some currentPerCommitmentPoint 
-                                    } 
+                                        channel.Channel with SavedChannelState = newSavedChannelState 
+                                    }
                             }
                         let! peerNodeAfterErrorSent = 
                             peerNodeAfterReestablishReceived.SendError msg (Some channelId.DnlChannelId)
