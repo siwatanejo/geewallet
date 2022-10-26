@@ -5,6 +5,7 @@ open System.Net
 
 open NBitcoin
 open DotNetLightning.Channel
+open DotNetLightning.Channel.ChannelSyncing
 open DotNetLightning.Utils
 open DotNetLightning.Serialization.Msgs
 open ResultUtils.Portability
@@ -166,12 +167,12 @@ type internal ConnectedChannel =
                     // ?
                     return Ok(peerNodeAfterReestablishReceived, channel)
                 else
-                    match channel.Channel.ApplyChannelReestablish theirReestablishMsg with
-                    | Ok([], channelAfterApplyReestablish) ->
-                        return Ok(peerNodeAfterReestablishSent, { channel with Channel = channelAfterApplyReestablish })
-                    | Ok(messages, channelAfterApplyReestablish) ->
-                        let channel = { channel with Channel = channelAfterApplyReestablish }
-                        
+                    let channelSyncResult = channel.Channel.ApplyChannelReestablish theirReestablishMsg
+                    let channelAfterApplyReestablish = { channel with Channel = channelSyncResult.Channel }
+                    match channelSyncResult.SyncResult with
+                    | SyncResult.Success [] ->
+                        return Ok(peerNodeAfterReestablishSent, channelAfterApplyReestablish)
+                    | SyncResult.Success messages ->
                         let rec sendMessages (peerNode: PeerNode) remainingMessages =
                             async {
                                 match remainingMessages with
@@ -250,36 +251,38 @@ type internal ConnectedChannel =
                         match processRepliesResult with
                         | Ok(chan, peerNode) -> return Ok(peerNode, { channel with Channel = chan })
                         | Error err -> return Error err
-                    | Error(ChannelError.OutOfSync msg) ->
-                        Infrastructure.LogError msg
-                        do! peerNodeAfterReestablishReceived.SendError msg (Some channelId.DnlChannelId) |> Async.Ignore
-                        return Error <| OutOfSync
-                    | Error(ChannelError.OutOfSyncLocalLateProven(msg, currentPerCommitmentPoint)) ->
-                        // SHOULD store my_current_per_commitment_point to retrieve funds 
-                        // should the sending node broadcast its commitment transaction on-chain
-                        Infrastructure.LogError msg
-                        let newSavedChannelState = 
-                            { 
-                                channel.Channel.SavedChannelState with 
-                                    SavedCurrentPerCommitmentPoint = Some currentPerCommitmentPoint 
-                            }
-                        let channelWithPerCommitmentPointSaved = 
-                            { 
-                                channel with 
-                                    Channel = 
-                                    { 
-                                        channel.Channel with SavedChannelState = newSavedChannelState 
-                                    }
-                            }
+                    | SyncResult.LocalLateProven _ ->
+                        Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
                         let! peerNodeAfterErrorSent = 
-                            peerNodeAfterReestablishReceived.SendError msg (Some channelId.DnlChannelId)
+                            peerNodeAfterReestablishReceived.SendError 
+                                "sync error - we were using outdated commitment" 
+                                (Some channelId.DnlChannelId)
                         // -- is returning Ok the way to go?
-                        return Ok(peerNodeAfterErrorSent, channelWithPerCommitmentPointSaved)
-                    | Error(ChannelError.OutOfSyncRemoteLying msg) ->
-                        Infrastructure.LogError msg
-                        do! peerNodeAfterReestablishReceived.SendError msg (Some channelId.DnlChannelId) |> Async.Ignore
+                        return Ok(peerNodeAfterErrorSent, channelAfterApplyReestablish)
+                    | SyncResult.LocalLateUnproven _ ->
+                        Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
+                        do! 
+                            peerNodeAfterReestablishReceived.SendError 
+                                "sync error - we may be using outdated commitment" 
+                                (Some channelId.DnlChannelId) 
+                            |> Async.Ignore
+                        return Error <| OutOfSync
+                    | SyncResult.RemoteLate ->
+                        Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
+                        do! 
+                            peerNodeAfterReestablishReceived.SendError 
+                                "sync error - you are using outdated commitment" 
+                                (Some channelId.DnlChannelId) 
+                            |> Async.Ignore
+                        return Error <| OutOfSync
+                    | SyncResult.RemoteLying _ ->
+                        Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
+                        do! 
+                            peerNodeAfterReestablishReceived.SendError 
+                                "sync error - you provided incorrect data in data_loss_protect" 
+                                (Some channelId.DnlChannelId) 
+                            |> Async.Ignore
                         return Error <| WrongDataLossProtect
-                    | Error _ -> return failwith "unreachable"
     }
 
     static member internal ConnectFromWallet (channelStore: ChannelStore)
