@@ -122,6 +122,7 @@ type internal ConnectedChannel =
 
     static member private Reestablish (peerNode: PeerNode)
                                       (channel: MonoHopUnidirectionalChannel)
+                                      (channelStore: ChannelStore)
                                           : Async<Result<PeerNode * MonoHopUnidirectionalChannel, ReestablishError>> = async {
         let channelId = channel.ChannelId
         let ourReestablishMsg = channel.Channel.CreateChannelReestablish()
@@ -253,12 +254,19 @@ type internal ConnectedChannel =
                         | Error err -> return Error err
                     | SyncResult.LocalLateProven _ ->
                         Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
-                        let! peerNodeAfterErrorSent = 
+                        do! 
                             peerNodeAfterReestablishReceived.SendError 
                                 "sync error - we were using outdated commitment" 
                                 (Some channelId.DnlChannelId)
-                        // -- is returning Ok the way to go?
-                        return Ok(peerNodeAfterErrorSent, channelAfterApplyReestablish)
+                            |> Async.Ignore
+                        // SHOULD store my_current_per_commitment_point to retrieve funds 
+                        // should the sending node broadcast its commitment transaction on-chain
+                        let serializedChannel = channelStore.LoadChannel channelId
+                        let updatedSerializedChannel = 
+                            { serializedChannel with SavedChannelState = channelAfterApplyReestablish.Channel.SavedChannelState }
+                        channelStore.SaveChannel updatedSerializedChannel
+
+                        return Error <| OutOfSync
                     | SyncResult.LocalLateUnproven _ ->
                         Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
                         do! 
@@ -318,7 +326,7 @@ type internal ConnectedChannel =
         | Error connectError -> return Error <| Connect connectError
         | Ok peerNode ->
             let! reestablishRes =
-                ConnectedChannel.Reestablish peerNode channel
+                ConnectedChannel.Reestablish peerNode channel channelStore
             match reestablishRes with
             | Error reestablishError -> return Error <| Reestablish reestablishError
             | Ok (peerNodeAfterReestablish, channelAfterReestablish) ->
@@ -352,7 +360,7 @@ type internal ConnectedChannel =
         | Error connectError -> return Error <| Connect connectError
         | Ok peerNode ->
             let! reestablishRes =
-                ConnectedChannel.Reestablish peerNode channel
+                ConnectedChannel.Reestablish peerNode channel channelStore
             match reestablishRes with
             | Error reestablishError -> return Error <| Reestablish reestablishError
             | Ok (peerNodeAfterReestablish, channelAfterReestablish) ->
