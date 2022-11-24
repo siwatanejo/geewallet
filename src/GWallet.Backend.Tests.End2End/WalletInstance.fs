@@ -54,7 +54,7 @@ type private WalletInstance (password: string, channelStore: ChannelStore) =
 
     member self.GetBalance(): Async<Money> = async {
         let btcAccount = self.Account :?> NormalUtxoAccount
-        let! cachedBalance = Account.GetShowableBalance btcAccount ServerSelectionMode.Analysis None
+        let! cachedBalance = GWallet.Backend.Account.GetShowableBalance btcAccount ServerSelectionMode.Analysis None
         match cachedBalance with
         | NotFresh _ ->
             do! Async.Sleep 500
@@ -64,7 +64,7 @@ type private WalletInstance (password: string, channelStore: ChannelStore) =
 
     member self.WaitForBalance (minAmount: Money): Async<Money> = async {
         let btcAccount = self.Account :?> NormalUtxoAccount
-        let! cachedBalance = Account.GetShowableBalance btcAccount ServerSelectionMode.Analysis None
+        let! cachedBalance = GWallet.Backend.Account.GetShowableBalance btcAccount ServerSelectionMode.Analysis None
         match cachedBalance with
         | Fresh amount when amount < minAmount.ToDecimal MoneyUnit.BTC ->
             do! Async.Sleep 500

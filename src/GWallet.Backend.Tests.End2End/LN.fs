@@ -2693,6 +2693,34 @@ type LN() =
 
         (serverWallet :> IDisposable).Dispose()
     }
+    
+    [<Test>]
+    [<Category "Reestablish">]
+    member __.``reestablish is correct for channels in sync``() = Async.RunSynchronously <| async {
+        let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
+
+        let checkReestablish () = 
+            async {
+                //let channelStateBeforeReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+                try
+                    let! reestablishResult = clientWallet.NodeClient.ConnectReestablish channelId
+                    UnwrapResult reestablishResult "error in reestablish" |> ignore
+                with
+                | exn ->
+                    Assert.Fail <| exn.ToString()
+                //let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+                // Equality doesn't work properly for SavedChannelState
+                //Assert.AreEqual(channelStateBeforeReestablish, channelStateAfterReestablish)
+            }
+
+        do! checkReestablish()
+
+        do! SendHtlcPaymentsToLnd clientWallet lnd channelId fundingAmount
+
+        do! checkReestablish()
+
+        TearDown clientWallet bitcoind electrumServer lnd
+    }
 
 
     [<SetUp>]
