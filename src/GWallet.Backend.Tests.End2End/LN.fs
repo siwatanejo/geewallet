@@ -2723,6 +2723,38 @@ type LN() =
         TearDown clientWallet bitcoind electrumServer lnd
     }
 
+    [<Test>]
+    [<Category "Reestablish">]
+    member __.``reestablish is correct when local node fell behind remote``() = Async.RunSynchronously <| async {
+        let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
+        
+        let channelStateBeforePayment = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+        
+        do! SendHtlcPaymentsToLnd clientWallet lnd channelId fundingAmount
+        
+        let serializedChannel = clientWallet.ChannelStore.LoadChannel channelId
+        let updatedSerializedChannel = 
+            { serializedChannel with SavedChannelState = channelStateBeforePayment }
+        clientWallet.ChannelStore.SaveChannel updatedSerializedChannel
+        
+        try
+            let! reestablishResult = clientWallet.NodeClient.ConnectReestablish channelId
+            match reestablishResult with
+            | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync))) -> ()
+            | result ->
+                Assert.Fail(sprintf "Expected OutOfSync, got %A" result)
+
+            let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+            Assert.That(
+                channelStateAfterReestablish.RemoteCurrentPerCommitmentPoint.IsSome, 
+                "Didn't store my_current_per_commitment_point")
+        with
+        | exn ->
+            Assert.Fail <| exn.ToString()
+
+        TearDown clientWallet bitcoind electrumServer lnd
+    }
+
 
     [<SetUp>]
     member __.Init() =
