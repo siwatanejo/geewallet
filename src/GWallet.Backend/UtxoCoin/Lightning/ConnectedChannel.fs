@@ -172,7 +172,7 @@ type internal ConnectedChannel =
                     let channelAfterApplyReestablish = { channel with Channel = channelSyncResult.Channel }
                     match channelSyncResult.SyncResult with
                     | SyncResult.Success [] ->
-                        return Ok(peerNodeAfterReestablishSent, channelAfterApplyReestablish)
+                        return Ok(peerNodeAfterReestablishReceived, channelAfterApplyReestablish)
                     | SyncResult.Success messages ->
                         let rec sendMessages (peerNode: PeerNode) remainingMessages =
                             async {
