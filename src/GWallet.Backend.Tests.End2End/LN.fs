@@ -2701,16 +2701,17 @@ type LN() =
 
         let checkReestablish () = 
             async {
-                //let channelStateBeforeReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+                let channelStateBeforeReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
                 try
                     let! reestablishResult = clientWallet.NodeClient.ConnectReestablish channelId
                     UnwrapResult reestablishResult "error in reestablish" |> ignore
                 with
                 | exn ->
                     Assert.Fail <| exn.ToString()
-                //let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
-                // Equality doesn't work properly for SavedChannelState
-                //Assert.AreEqual(channelStateBeforeReestablish, channelStateAfterReestablish)
+                let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+                // Equality doesn't work properly for some types in SavedChannelState (NBitcoin types wrappers in particular),
+                // so compare the textual representations
+                Assert.AreEqual(channelStateBeforeReestablish.ToString(), channelStateAfterReestablish.ToString())
             }
 
         do! checkReestablish()
