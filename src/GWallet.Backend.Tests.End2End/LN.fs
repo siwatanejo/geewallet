@@ -2755,6 +2755,51 @@ type LN() =
         TearDown clientWallet bitcoind electrumServer lnd
     }
 
+    [<Test>]
+    [<Category "G2G_ReestablishRemoteLate_Fundee">]
+    member __.``reestablish is correct when remote node is behind local (fundee)``() = Async.RunSynchronously <| async {
+        let! serverWallet, channelId = AcceptChannelFromGeewalletFunder()
+        
+        let channelStateBeforePayment = serverWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+                
+        do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
+
+        let serializedChannel = serverWallet.ChannelStore.LoadChannel channelId
+        let updatedSerializedChannel = 
+            { serializedChannel with SavedChannelState = channelStateBeforePayment }
+        serverWallet.ChannelStore.SaveChannel updatedSerializedChannel
+        
+        do! Network.ReceiveLightningEvent serverWallet.NodeServer channelId false |> Async.Ignore
+
+        (serverWallet :> IDisposable).Dispose()
+    }
+    
+    [<Test>]
+    [<Category "G2G_ReestablishRemoteLate_Funder">]
+    member __.``reestablish is correct when remote node is behind local (funder)``() = Async.RunSynchronously <| async {
+        let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = 
+            OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
+        
+        let! sendResult = SendHtlcPaymentToGW channelId clientWallet "invoice.txt"
+        UnwrapResult sendResult "Sending HTLC failed"
+        
+        try
+            let! reestablishResult = clientWallet.NodeClient.ConnectReestablish channelId
+            match reestablishResult with
+            | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync))) -> ()
+            | result ->
+                Assert.Fail(sprintf "Expected OutOfSync, got %A" result)
+            let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+            Assert.That(
+                channelStateAfterReestablish.RemoteCurrentPerCommitmentPoint.IsNone, 
+                "Should not store my_current_per_commitment_point")
+        with
+        | exn ->
+            Assert.Fail <| exn.ToString()
+        
+        TearDown clientWallet bitcoind electrumServer lnd
+    }
+
 
     [<SetUp>]
     member __.Init() =
