@@ -2710,8 +2710,9 @@ type LN() =
                     Assert.Fail <| exn.ToString()
                 let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
                 // Equality doesn't work properly for some types in SavedChannelState (NBitcoin types wrappers in particular),
-                // so compare the textual representations
-                Assert.AreEqual(channelStateBeforeReestablish.ToString(), channelStateAfterReestablish.ToString())
+                // so only compare some properties
+                Assert.AreEqual(channelStateBeforeReestablish.RemoteCommit.Index, channelStateAfterReestablish.RemoteCommit.Index)
+                Assert.AreEqual(channelStateBeforeReestablish.LocalCommit.Index, channelStateAfterReestablish.LocalCommit.Index)
             }
 
         do! checkReestablish()
