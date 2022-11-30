@@ -2801,6 +2801,64 @@ type LN() =
         TearDown clientWallet bitcoind electrumServer lnd
     }
 
+    [<Test>]
+    [<Category "G2G_ReestablishRemoteLying_Fundee">]
+    member __.``reestablish is correct when remote node has wrong data_loss_protect (fundee)``() = Async.RunSynchronously <| async {
+        let! serverWallet, channelId = AcceptChannelFromGeewalletFunder()
+        
+        do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
+
+        let serializedChannel = serverWallet.ChannelStore.LoadChannel channelId
+        // we modify SavedChannelState in such way that channel_reestablish message formed from it
+        // will contain larger than expected next_revocation_number and wrong your_last_per_commitment_secret
+        let updatedSerializedChannel = 
+            let fakeNextCommitmentNumber = serializedChannel.SavedChannelState.RemoteCommit.Index.NextCommitment()
+            let perCommitmentSecrets = serializedChannel.SavedChannelState.RemotePerCommitmentSecrets
+            let corruptedPerCommitmentSecrets = 
+                perCommitmentSecrets
+                    .InsertPerCommitmentSecret
+                        (perCommitmentSecrets.NextCommitmentNumber())
+                        (PerCommitmentSecret(new Key()))
+            { serializedChannel with 
+                SavedChannelState = 
+                    { serializedChannel.SavedChannelState with
+                        RemotePerCommitmentSecrets = 
+                            UnwrapResult corruptedPerCommitmentSecrets "Could not update RemotePerCommitmentSecrets"
+                        RemoteCommit = 
+                            { serializedChannel.SavedChannelState.RemoteCommit with Index = fakeNextCommitmentNumber } } }
+        serverWallet.ChannelStore.SaveChannel updatedSerializedChannel
+        
+        do! Network.ReceiveLightningEvent serverWallet.NodeServer channelId false |> Async.Ignore
+
+        (serverWallet :> IDisposable).Dispose()
+    }
+    
+    [<Test>]
+    [<Category "G2G_ReestablishRemoteLying_Funder">]
+    member __.``reestablish is correct when remote node has wrong data_loss_protect (funder)``() = Async.RunSynchronously <| async {
+        let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = 
+            OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
+        
+        let! sendResult = SendHtlcPaymentToGW channelId clientWallet "invoice.txt"
+        UnwrapResult sendResult "Sending HTLC failed"
+        
+        try
+            let! reestablishResult = clientWallet.NodeClient.ConnectReestablish channelId
+            match reestablishResult with
+            | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.WrongDataLossProtect))) -> ()
+            | result ->
+                Assert.Fail(sprintf "Expected WrongDataLossProtect, got %A" result)
+            let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
+            Assert.That(
+                channelStateAfterReestablish.RemoteCurrentPerCommitmentPoint.IsNone, 
+                "Should not store my_current_per_commitment_point")
+        with
+        | exn ->
+            Assert.Fail <| exn.Message
+        
+        TearDown clientWallet bitcoind electrumServer lnd
+    }
+
 
     [<SetUp>]
     member __.Init() =
