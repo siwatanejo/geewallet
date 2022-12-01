@@ -17,7 +17,7 @@ open GWallet.Backend.FSharpUtil.UwpHacks
 type private WalletInstance (password: string, channelStore: ChannelStore) =
     static let oneWalletAtATime: Semaphore = new Semaphore(1, 1)
 
-    static member New (privateKeyOpt: Option<Key>): Async<WalletInstance> = async {
+    static member New (privateKeyOpt: Option<Key>, ?channelStoreFactory: NormalUtxoAccount -> ChannelStore): Async<WalletInstance> = async {
         oneWalletAtATime.WaitOne() |> ignore
 
         let password = Path.GetRandomFileName()
@@ -33,8 +33,11 @@ type private WalletInstance (password: string, channelStore: ChannelStore) =
         let btcAccount =
             let account = Account.GetAllActiveAccounts() |> Seq.filter (fun x -> x.Currency = Currency.BTC) |> Seq.head
             account :?> NormalUtxoAccount
-        let channelStore = ChannelStore btcAccount
-        return new WalletInstance(password, channelStore)
+        let channelStoreToUse = 
+            match channelStoreFactory with
+            | Some factory -> factory btcAccount
+            | None -> ChannelStore btcAccount
+        return new WalletInstance(password, channelStoreToUse)
     }
 
     interface IDisposable with
@@ -197,6 +200,13 @@ type ClientWalletInstance private (wallet: WalletInstance, nodeClient: NodeClien
 type ServerWalletInstance private (wallet: WalletInstance, nodeServer: NodeServer) =
     static member New (listenEndpoint: IPEndPoint) (privateKeyOpt: Option<Key>): Async<ServerWalletInstance> = async {
         let! wallet = WalletInstance.New privateKeyOpt
+        let! nodeServer =
+            Connection.StartServer wallet.ChannelStore wallet.Password (listenEndpoint |> NodeServerType.Tcp)
+        return new ServerWalletInstance(wallet, nodeServer)
+    }
+
+    static member NewWithChannelStore (listenEndpoint: IPEndPoint) (privateKeyOpt: Option<Key>) channelStoreFactory : Async<ServerWalletInstance> = async {
+        let! wallet = WalletInstance.New(privateKeyOpt, channelStoreFactory)
         let! nodeServer =
             Connection.StartServer wallet.ChannelStore wallet.Password (listenEndpoint |> NodeServerType.Tcp)
         return new ServerWalletInstance(wallet, nodeServer)
