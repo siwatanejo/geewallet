@@ -191,8 +191,7 @@ type ChannelStore(account: NormalUtxoAccount) =
             SerializedChannel.LightningSerializerSettings self.Currency
         )
 
-    abstract SaveChannel : SerializedChannel -> unit
-    default self.SaveChannel (serializedChannel: SerializedChannel) =
+    member internal self.SaveChannel (serializedChannel: SerializedChannel) =
         let fileName = self.ChannelFileName (serializedChannel.ChannelId()) false
         let json =
             Marshalling.SerializeCustom (

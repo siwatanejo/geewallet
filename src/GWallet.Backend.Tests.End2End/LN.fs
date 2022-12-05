@@ -20,16 +20,6 @@ open GWallet.Backend.FSharpUtil
 open GWallet.Backend.FSharpUtil.UwpHacks
 
 
-type ChannelStoreWithHistory(account) =
-    inherit ChannelStore(account)
-    
-    member val History = ResizeArray<SerializedChannel>()
-
-    override self.SaveChannel (serializedChannel: SerializedChannel) =
-        self.History.Insert(0, serializedChannel)
-        base.SaveChannel serializedChannel
-
-
 [<TestFixture>]
 type LN() =
     do Config.SetRunModeToTesting()
@@ -134,16 +124,9 @@ type LN() =
             return channelId, serverWallet, bitcoind, electrumServer, lnd
         }
 
-    let AcceptChannelFromGeewalletFunderWithChannelStoreFactory channelStoreFactory =
+    let AcceptChannelFromGeewalletFunder () =
         async {
-            let! serverWallet = 
-                match channelStoreFactory with
-                | Some factory -> 
-                    ServerWalletInstance.NewWithChannelStore 
-                        Config.FundeeLightningIPEndpoint 
-                        (Some Config.FundeeAccountsPrivateKey)
-                        factory
-                | None -> ServerWalletInstance.New Config.FundeeLightningIPEndpoint (Some Config.FundeeAccountsPrivateKey)
+            let! serverWallet = ServerWalletInstance.New Config.FundeeLightningIPEndpoint (Some Config.FundeeAccountsPrivateKey)
             let! pendingChannelRes =
                 Lightning.Network.AcceptChannel
                     serverWallet.NodeServer
@@ -163,8 +146,6 @@ type LN() =
 
             return serverWallet, channelId
         }
-
-    let AcceptChannelFromGeewalletFunder() = AcceptChannelFromGeewalletFunderWithChannelStoreFactory None
 
     let ClientCloseChannel (clientWallet: ClientWalletInstance) (bitcoind: Bitcoind) channelId =
         async {
