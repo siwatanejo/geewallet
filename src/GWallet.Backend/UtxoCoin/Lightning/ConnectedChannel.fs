@@ -248,9 +248,9 @@ type internal ConnectedChannel =
                                 | None -> return Ok(channel, peerNode)
                             }
 
-                        let! processRepliesResult = processReplies channel.Channel peerNodeAfterMessagesSent
+                        let! processRepliesResult = processReplies channelAfterApplyReestablish.Channel peerNodeAfterMessagesSent
                         match processRepliesResult with
-                        | Ok(chan, peerNode) -> return Ok(peerNode, { channel with Channel = chan })
+                        | Ok(chan, peerNode) -> return Ok(peerNode, { channelAfterApplyReestablish with Channel = chan })
                         | Error err -> return Error err
                     | SyncResult.LocalLateProven _ ->
                         Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
