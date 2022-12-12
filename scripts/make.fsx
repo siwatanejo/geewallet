@@ -301,7 +301,6 @@ let RunTests (suite: string) =
             "UpdateFeeMsg"
             "ReestablishRemoteLate"
             "ReestablishRemoteLying"
-            "ReestablishRetransmit"
         ]
 
     let geewallet2geewalletTestNamePrefix, funderSuffix, fundeeSuffix = "G2G_", "_Funder", "_Fundee"

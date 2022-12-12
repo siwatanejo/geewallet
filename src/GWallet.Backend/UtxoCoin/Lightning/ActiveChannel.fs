@@ -540,10 +540,6 @@ and internal ActiveChannel =
 
         let! peerNodeAfterCommitmentSignedSent = peerNode.SendMsg ourCommitmentSignedMsg
 
-        let connectedChannelAfterCommitmentSignedSent =
-            { connectedChannel with Channel = { Channel = channelAfterCommitmentSigned } }
-        connectedChannelAfterCommitmentSignedSent.SaveToWallet()
-        
         let rec recv (peerNode: PeerNode) =
             async {
                 let! recvChannelMsgRes = peerNode.RecvChannelMsg()
