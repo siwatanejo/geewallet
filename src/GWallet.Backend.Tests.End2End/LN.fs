@@ -2748,7 +2748,7 @@ type LN() =
             let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
             Assert.That(
                 channelStateAfterReestablish.RemoteCurrentPerCommitmentPoint.IsSome, 
-                "Didn't store my_current_per_commitment_point")
+                "Should store my_current_per_commitment_point")
         with
         | exn ->
             Assert.Fail <| exn.ToString()
@@ -2770,7 +2770,7 @@ type LN() =
             { serializedChannel with SavedChannelState = channelStateBeforePayment }
         serverWallet.ChannelStore.SaveChannel updatedSerializedChannel
         
-        do! Network.ReceiveLightningEvent serverWallet.NodeServer channelId false |> Async.Ignore
+        do! ActiveChannel.AcceptReestablish serverWallet.ChannelStore serverWallet.NodeServer.TransportListener channelId |> Async.Ignore
 
         (serverWallet :> IDisposable).Dispose()
     }
@@ -2828,7 +2828,7 @@ type LN() =
                             { serializedChannel.SavedChannelState.RemoteCommit with Index = fakeNextCommitmentNumber } } }
         serverWallet.ChannelStore.SaveChannel updatedSerializedChannel
         
-        do! Network.ReceiveLightningEvent serverWallet.NodeServer channelId false |> Async.Ignore
+        do! ActiveChannel.AcceptReestablish serverWallet.ChannelStore serverWallet.NodeServer.TransportListener channelId |> Async.Ignore
 
         (serverWallet :> IDisposable).Dispose()
     }
