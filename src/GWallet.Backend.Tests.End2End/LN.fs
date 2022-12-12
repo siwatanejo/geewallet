@@ -2741,7 +2741,7 @@ type LN() =
         try
             let! reestablishResult = clientWallet.NodeClient.ConnectReestablish channelId
             match reestablishResult with
-            | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync))) -> ()
+            | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync false))) -> ()
             | result ->
                 Assert.Fail(sprintf "Expected OutOfSync, got %A" result)
 
@@ -2787,7 +2787,7 @@ type LN() =
         try
             let! reestablishResult = clientWallet.NodeClient.ConnectReestablish channelId
             match reestablishResult with
-            | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync))) -> ()
+            | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync true))) -> ()
             | result ->
                 Assert.Fail(sprintf "Expected OutOfSync, got %A" result)
             let channelStateAfterReestablish = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState

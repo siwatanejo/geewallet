@@ -23,7 +23,7 @@ type internal ReestablishError =
     | ExpectedReestablishOrFundingLockedMsg of ILightningMsg
     | ChannelError of ChannelError
     | WrongChannelId of given: ChannelId * expected: ChannelId
-    | OutOfSync
+    | OutOfSync of closeChannel: bool
     | WrongDataLossProtect
     interface IErrorMsg with
         member self.Message =
@@ -40,7 +40,7 @@ type internal ReestablishError =
                 SPrintF1 "Channel error: %s" channelError.Message
             | WrongChannelId (given, expected) ->
                 SPrintF2 "Wrong channel_id. Expected: %A, given: %A" expected.Value given.Value
-            | OutOfSync ->
+            | OutOfSync _ ->
                 "Channel is out of sync"
             | WrongDataLossProtect -> 
                 "Wrong data loss protect values"
@@ -53,7 +53,7 @@ type internal ReestablishError =
             | ExpectedReestablishOrFundingLockedMsg _ -> false
             | ChannelError channelError -> channelError.RecommendedAction <> ChannelConsumerAction.Ignore
             | WrongChannelId _ -> false
-            | OutOfSync -> false
+            | OutOfSync closeChannel -> closeChannel
             | WrongDataLossProtect -> true
 
     member internal self.PossibleBug =
@@ -63,7 +63,7 @@ type internal ReestablishError =
         | ExpectedReestablishMsg _
         | ExpectedReestablishOrFundingLockedMsg _ -> false
         | ChannelError _ -> false
-        | OutOfSync -> false
+        | OutOfSync _ -> false
         | WrongChannelId _ -> false
         | WrongDataLossProtect -> false
 
@@ -173,85 +173,16 @@ type internal ConnectedChannel =
                     match channelSyncResult.SyncResult with
                     | SyncResult.Success [] ->
                         return Ok(peerNodeAfterReestablishReceived, channelAfterApplyReestablish)
-                    | SyncResult.Success messages ->
-                        let rec sendMessages (peerNode: PeerNode) remainingMessages =
-                            async {
-                                match remainingMessages with
-                                | head :: tail -> 
-                                    let! newPeerNode = peerNode.SendMsg head 
-                                    return! sendMessages newPeerNode tail
-                                | [] -> return peerNode
-                            }
-                        let! peerNodeAfterMessagesSent = sendMessages peerNodeAfterReestablishReceived messages
-
-                        // Wait for reply and process a reply after sending messages
-                        // possible messages: IUpdateMsg, RevokeAndACKMsg, CommitmentSignedMsg
-                        let processReply (channel: Channel) (peerNode: PeerNode) : Async<Result<Channel * PeerNode, ReestablishError>> =
-                            async {
-                                let! nextMsg = peerNode.RecvChannelMsg()
-                                match nextMsg with
-                                | Ok(newPeerNode, (:? UpdateAddHTLCMsg as updateAddHtlcMsg)) -> 
-                                    let! blockHeightResponse =
-                                            Server.Query Currency.BTC
-                                                (QuerySettings.Default ServerSelectionMode.Fast)
-                                                (ElectrumClient.SubscribeHeaders ())
-                                                None
-                                    let blockHeight = (blockHeightResponse.Height |> uint32) |> BlockHeight
-                                    return 
-                                        match channel.ApplyUpdateAddHTLC updateAddHtlcMsg blockHeight with
-                                        | Ok chan -> Ok(chan, newPeerNode)
-                                        | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                | Ok(newPeerNode, (:? UpdateFailHTLCMsg as updateFailHtlcMsg)) -> 
-                                    return
-                                        match channel.ApplyUpdateFailHTLC updateFailHtlcMsg with
-                                        | Ok chan -> Ok(chan, newPeerNode)
-                                        | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                | Ok(newPeerNode, (:? UpdateFailMalformedHTLCMsg as updateFailMalformedHtlcMsg)) ->
-                                    return 
-                                        match channel.ApplyUpdateFailMalformedHTLC updateFailMalformedHtlcMsg with
-                                        | Ok chan -> Ok(chan, newPeerNode)
-                                        | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                | Ok(newPeerNode, (:? UpdateFulfillHTLCMsg as updateFulfillHtlcMsg)) ->
-                                    return
-                                        match channel.ApplyUpdateFulfillHTLC updateFulfillHtlcMsg with
-                                        | Ok chan -> Ok(chan, newPeerNode)
-                                        | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                | Ok(newPeerNode, (:? RevokeAndACKMsg as revokeAndAckMsg)) ->
-                                    return
-                                        match channel.ApplyRevokeAndACK revokeAndAckMsg with
-                                        | Ok chan -> Ok(chan, newPeerNode)
-                                        | Error channelError -> Error <| ReestablishError.ChannelError channelError
-                                | Ok(newPeerNode, (:? CommitmentSignedMsg as commitmentSignedMsg)) ->
-                                    match channel.ApplyCommitmentSigned commitmentSignedMsg with
-                                    | Ok(chan, revokeAndAckMsg) -> 
-                                        let! newPeerNode = newPeerNode.SendMsg revokeAndAckMsg
-                                        return Ok(chan, newPeerNode)
-                                    | Error channelError -> return Error <| ReestablishError.ChannelError channelError
-                                | Error recvChannelMsgError -> 
-                                    return
-                                        match recvChannelMsgError with
-                                        | RecvChannelMsgError.RecvMsg recvMsg -> 
-                                            Error <| ReestablishError.RecvReestablish recvMsg
-                                        | RecvChannelMsgError.ReceivedPeerErrorMessage(newPeerNode, peerErrorMsg) -> 
-                                            Error <| ReestablishError.PeerErrorResponse(newPeerNode, peerErrorMsg)
-                                | _ -> return failwith "not expected"
-                            }
-                        
-                        let timeout = 1000 // in ms
-                        let rec processReplies (channel: Channel) (peerNode: PeerNode) =
-                            async {
-                                let! reply = processReply channel peerNode |> Async.withTimeout timeout
-                                match reply with
-                                | Some(Ok(newChannel, newPeerNode)) -> 
-                                    return! processReplies newChannel newPeerNode
-                                | Some(Error _ as err) -> return err
-                                | None -> return Ok(channel, peerNode)
-                            }
-
-                        let! processRepliesResult = processReplies channelAfterApplyReestablish.Channel peerNodeAfterMessagesSent
-                        match processRepliesResult with
-                        | Ok(chan, peerNode) -> return Ok(peerNode, { channelAfterApplyReestablish with Channel = chan })
-                        | Error err -> return Error err
+                    | SyncResult.Success _messages ->
+                        // Since GWallet doesn't have listening mode in which it waits for messages 
+                        // and processes whatever it receives, implementing retransmitting of messages
+                        // is problematic. So for now, just send an error and close the channel.
+                        do! 
+                            peerNodeAfterReestablishReceived.SendError 
+                                "sync error - retransmitting of messages is not supported" 
+                                (Some channelId.DnlChannelId) 
+                            |> Async.Ignore
+                        return Error <| OutOfSync true
                     | SyncResult.LocalLateProven _ ->
                         Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
                         do! 
@@ -266,15 +197,17 @@ type internal ConnectedChannel =
                             { serializedChannel with SavedChannelState = channelAfterApplyReestablish.Channel.SavedChannelState }
                         channelStore.SaveChannel updatedSerializedChannel
 
-                        return Error <| OutOfSync
+                        return Error <| OutOfSync false
                     | SyncResult.LocalLateUnproven _ ->
                         Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
                         do! 
+                            /// message as in eclair
+                            let errorMessage = "please publish your local commitment"
                             peerNodeAfterReestablishReceived.SendError 
-                                "sync error - we may be using outdated commitment" 
+                                errorMessage
                                 (Some channelId.DnlChannelId) 
                             |> Async.Ignore
-                        return Error <| OutOfSync
+                        return Error <| OutOfSync false
                     | SyncResult.RemoteLate ->
                         Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
                         do! 
@@ -282,7 +215,7 @@ type internal ConnectedChannel =
                                 "sync error - you are using outdated commitment" 
                                 (Some channelId.DnlChannelId) 
                             |> Async.Ignore
-                        return Error <| OutOfSync
+                        return Error <| OutOfSync true
                     | SyncResult.RemoteLying _ ->
                         Infrastructure.LogError("Sync error: " + channelSyncResult.ErrorMessage)
                         do! 
