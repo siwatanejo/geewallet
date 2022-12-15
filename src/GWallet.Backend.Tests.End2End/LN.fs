@@ -2814,11 +2814,6 @@ type LN() =
                 return failwith "incorrect balance after receiving payment 2"
         | _ ->
             Assert.Fail "received non-htlc lightning event"
-
-        let fundingOutPoint =
-            let fundingTxId = uint256(channelInfoAfterPayment2.FundingTxId.ToString())
-            let fundingOutPointIndex = channelInfoAfterPayment2.FundingOutPointIndex
-            OutPoint(fundingTxId, fundingOutPointIndex)
         
         serverWallet.ChannelStore.SaveChannel serializedChannelAfterPayment1
         
@@ -2829,7 +2824,7 @@ type LN() =
         | result ->
             Assert.Fail(sprintf "Expected OutOfSync, got %A" result)
             
-        do! lnd.CloseChannel fundingOutPoint true
+        // LND has received error from us an is force-closing the channel now
         
         let rec waitForClosingTx () =
             async {
@@ -2843,18 +2838,32 @@ type LN() =
             }
         
         let! closingTx = waitForClosingTx()
+        
+        bitcoind.GenerateBlocksToDummyAddress(BlockHeightOffset32 1u)
+        
         let! recoveryTxResult =
             (Node.Server serverWallet.NodeServer).CreateRecoveryTxForForceClose
                 channelId
                 closingTx.Tx
         match recoveryTxResult with
         | Ok recoveryTx ->
-            let! _txIdString =
+            let! txIdString =
                 ChannelManager.BroadcastRecoveryTxAndCloseChannel recoveryTx serverWallet.ChannelStore
+            // wait for recovery tx to appear in mempool
+            while bitcoind.GetTxIdsInMempool().Length = 0 do
+                do! Async.Sleep 500
+            // Mine the recovery tx
+            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
             
             let channelInfoAfterForceClose = serverWallet.ChannelStore.ChannelInfo channelId
-            Console.WriteLine(sprintf "*** Balance after force close: %A" channelInfoAfterForceClose.Balance)
-            Console.WriteLine(printf "*** Balance after payments: %A" (balanceBeforeAnyPayment + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount))
+            match channelInfoAfterForceClose.Status with
+            | RecoveryTxSentOrNotNeeded(Some txId) ->
+                Assert.AreEqual(txId, TransactionIdentifier.Parse txIdString)
+            | status -> Assert.Fail(sprintf "Expected RecoveryTxSentOrNotNeeded(Some tx), got %A" status)
+            let expectedBalance = balanceBeforeAnyPayment + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount
+            let possibleFees = Money.Coins 0.0001m
+            let! balanceAfterRecovery = serverWallet.WaitForBalance(expectedBalance - possibleFees)
+            Assert.That((expectedBalance - balanceAfterRecovery).Abs() < possibleFees)
         | Error err ->
             Assert.Fail("Error recovering funds: " + err.ToString())
         
