@@ -2757,6 +2757,111 @@ type LN() =
     }
 
     [<Test>]
+    [<Category "Reestablish">]
+    member __.``can retrieve funds from channel if local node fell behind remote``() = Async.RunSynchronously <| async {
+        let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
+
+        let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
+        match channelInfoBeforeAnyPayment.Status with
+        | ChannelStatus.Active -> ()
+        | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+
+        let balanceBeforeAnyPayment = Money(channelInfoBeforeAnyPayment.Balance, MoneyUnit.BTC)
+
+        let invoiceManager = InvoiceManagement (serverWallet.Account :?> NormalUtxoAccount, serverWallet.Password)
+        
+        let sendLndPayment1Job (paymentAmount: Money) = async {
+            // Wait for lnd to recognize we're online
+            do! Async.Sleep 10000
+
+            let amountInSatoshis =
+                Convert.ToUInt64 paymentAmount.Satoshi
+            let invoice1InString = invoiceManager.CreateInvoice amountInSatoshis "Payment 1"
+
+            do! lnd.SendPayment invoice1InString
+        }
+        let receiveGeewalletPayment = async {
+            let! receiveHtlcPaymentRes =
+                Lightning.Network.ReceiveLightningEvent serverWallet.NodeServer channelId true
+            return UnwrapResult receiveHtlcPaymentRes "ReceiveHtlcPayment failed"
+        }
+
+        let! (_, receiveLightningEventResult) =
+            AsyncExtensions.MixedParallel2
+                (sendLndPayment1Job walletToWalletTestPayment1Amount)
+                receiveGeewalletPayment
+
+        match receiveLightningEventResult with
+        | IncomingChannelEvent.HtlcPayment _status ->
+            let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
+            if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> balanceBeforeAnyPayment + walletToWalletTestPayment1Amount then
+                return failwith "incorrect balance after receiving payment 1"
+        | _ ->
+            Assert.Fail "received non-htlc lightning event"
+            
+        let serializedChannelAfterPayment1 = serverWallet.ChannelStore.LoadChannel channelId
+            
+        let! (_, receiveLightningEventResult2) =
+            AsyncExtensions.MixedParallel2
+                (sendLndPayment1Job walletToWalletTestPayment2Amount)
+                receiveGeewalletPayment
+                
+        let channelInfoAfterPayment2 = serverWallet.ChannelStore.ChannelInfo channelId
+        match receiveLightningEventResult2 with
+        | IncomingChannelEvent.HtlcPayment _status ->
+            if Money(channelInfoAfterPayment2.Balance, MoneyUnit.BTC) <>
+               balanceBeforeAnyPayment + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount then
+                return failwith "incorrect balance after receiving payment 2"
+        | _ ->
+            Assert.Fail "received non-htlc lightning event"
+
+        let fundingOutPoint =
+            let fundingTxId = uint256(channelInfoAfterPayment2.FundingTxId.ToString())
+            let fundingOutPointIndex = channelInfoAfterPayment2.FundingOutPointIndex
+            OutPoint(fundingTxId, fundingOutPointIndex)
+        
+        serverWallet.ChannelStore.SaveChannel serializedChannelAfterPayment1
+        
+        let! reestablishResult =
+            ActiveChannel.AcceptReestablish serverWallet.ChannelStore serverWallet.NodeServer.TransportListener channelId
+        match reestablishResult with
+        | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync false))) -> ()
+        | result ->
+            Assert.Fail(sprintf "Expected OutOfSync, got %A" result)
+            
+        do! lnd.CloseChannel fundingOutPoint true
+        
+        let rec waitForClosingTx () =
+            async {
+                let! forceCloseResult = serverWallet.ChannelStore.CheckForClosingTx channelId
+                match forceCloseResult with
+                | Some (ClosingTx.ForceClose commitmentTx, _closingTxConfirmations) ->
+                    return commitmentTx
+                | _ ->
+                   do! Async.Sleep 1000
+                   return! waitForClosingTx()
+            }
+        
+        let! closingTx = waitForClosingTx()
+        let! recoveryTxResult =
+            (Node.Server serverWallet.NodeServer).CreateRecoveryTxForForceClose
+                channelId
+                closingTx.Tx
+        match recoveryTxResult with
+        | Ok recoveryTx ->
+            let! _txIdString =
+                ChannelManager.BroadcastRecoveryTxAndCloseChannel recoveryTx serverWallet.ChannelStore
+            
+            let channelInfoAfterForceClose = serverWallet.ChannelStore.ChannelInfo channelId
+            Console.WriteLine(sprintf "*** Balance after force close: %A" channelInfoAfterForceClose.Balance)
+            Console.WriteLine(printf "*** Balance after payments: %A" (balanceBeforeAnyPayment + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount))
+        | Error err ->
+            Assert.Fail("Error recovering funds: " + err.ToString())
+        
+        TearDown serverWallet bitcoind electrumServer lnd
+    }
+
+    [<Test>]
     [<Category "G2G_ReestablishRemoteLate_Fundee">]
     member __.``reestablish is correct when remote node is behind local (fundee)``() = Async.RunSynchronously <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder()
