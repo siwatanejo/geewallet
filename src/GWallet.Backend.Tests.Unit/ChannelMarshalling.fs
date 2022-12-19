@@ -12,49 +12,44 @@ type ChannelMarshalling () =
   "version": "{version}",
   "typeName": "GWallet.Backend.UtxoCoin.Lightning.SerializedChannel",
   "value": {
-    "channelIndex": 244773690,
+    "channelIndex": 712266779,
     "savedChannelState": {
       "staticChannelConfig": {
         "announceChannel": false,
         "remoteNodeId": {
           "case": "NodeId",
           "fields": [
-            "02c2c2b76a215d9acc3ec100abd6f6efa60797eb941ae3bd9df7c82cc97732beab"
+            "03394a72b8256a110c589a116d18ac22087ee23178ecb39d71a4c0bdd9aec28c16"
           ]
         },
         "network": "RegTest",
         "fundingTxMinimumDepth": {
           "case": "BlockHeightOffset32",
           "fields": [
-            2
+            3
           ]
         },
         "localStaticShutdownScriptPubKey": {
           "case": "Some",
           "fields": [
-            "a914684e8b042ae0437a9666e5ef695856208379713e87"
+            "a914e8a40a255aba66e5d3dab807054ecdbf17cb2f8b87"
           ]
         },
-        "remoteStaticShutdownScriptPubKey": {
-          "case": "Some",
-          "fields": [
-            "a91488d22420f8d76ae5e48e3894385fa84a2ee4594d87"
-          ]
-        },
-        "isFunder": false,
+        "remoteStaticShutdownScriptPubKey": null,
+        "isFunder": true,
         "fundingScriptCoin": {
           "isP2SH": false,
           "redeemType": 1,
-          "redeem": "522102c50cf6d17bf83be3a2f8d4b3f9541ae6ca037445ab490e64f395a1d85f54023b2103f099d2f4ca7aa42652f3ddc7a9c6ecbfa5512e8b189fd3be8d50086837a55b2452ae",
+          "redeem": "5221033c53bb43e3e05883e7b8192880466bada0569f06a23cf98406cd10530fc8bdec2103f16ef5959b54c358eadd94689edbd4b62096b8d1a772ea1af91b3a4c4c42267d52ae",
           "canGetScriptCode": true,
           "isMalleable": false,
-          "outpoint": "d3a9d4a9f81c5005dad93ece2f8c0ca8ad6e0258bbd8cff85a9b09712a22cf1700000000",
+          "outpoint": "2f1f1d004f9de2237bb2167f0a113aa18bef17aeaaf544a9e1e8055b46a8177800000000",
           "txOut": {
-            "scriptPubKey": "0020cada82da7ed6cbe831db4727164aaaf60e592ccf3ebebd5ef41d3eeca42732bf",
+            "scriptPubKey": "00209a3fbc31f6802dd50fa6b2d4877f536676e86a72ed1f486e7b3d92f27fe26e2d",
             "value": 10000000
           },
           "amount": 10000000,
-          "scriptPubKey": "0020cada82da7ed6cbe831db4727164aaaf60e592ccf3ebebd5ef41d3eeca42732bf"
+          "scriptPubKey": "00209a3fbc31f6802dd50fa6b2d4877f536676e86a72ed1f486e7b3d92f27fe26e2d"
         },
         "localParams": {
           "dustLimitSatoshis": 354,
@@ -85,54 +80,54 @@ type ChannelMarshalling () =
           "maxHTLCValueInFlightMSat": {
             "case": "LNMoney",
             "fields": [
-              10000000000
+              9900000000
             ]
           },
           "channelReserveSatoshis": 100000,
           "htlcMinimumMSat": {
             "case": "LNMoney",
             "fields": [
-              1000
+              1
             ]
           },
           "toSelfDelay": {
             "case": "BlockHeightOffset16",
             "fields": [
-              2
+              1201
             ]
           },
-          "maxAcceptedHTLCs": 10,
-          "features": "010000000001000100000010"
+          "maxAcceptedHTLCs": 483,
+          "features": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000010000000100000100101001010100001"
         },
         "remoteChannelPubKeys": {
           "fundingPubKey": {
             "case": "FundingPubKey",
             "fields": [
-              "02c50cf6d17bf83be3a2f8d4b3f9541ae6ca037445ab490e64f395a1d85f54023b"
+              "03f16ef5959b54c358eadd94689edbd4b62096b8d1a772ea1af91b3a4c4c42267d"
             ]
           },
           "revocationBasepoint": {
             "case": "RevocationBasepoint",
             "fields": [
-              "029ab034be7720cd9348eeee7d54dafa30add0076164357ea5c31a4ae0ffc2eaf6"
+              "03246aaff22fef0d7620fe2befe77d02163ecf117732caad3e2348fca37cb75ea9"
             ]
           },
           "paymentBasepoint": {
             "case": "PaymentBasepoint",
             "fields": [
-              "03ebf10fae384093d65cb3a1b6b54d7cc13747c5e1b991b4571da7d39e6e4b94de"
+              "03f266626694ed558db0e75adf58c466e69e7041417fb24bdef69b09bd6d749caa"
             ]
           },
           "delayedPaymentBasepoint": {
             "case": "DelayedPaymentBasepoint",
             "fields": [
-              "0229d0d325dd831c9354bf6528d879ba4511e0006774abe937704fa870f7ed0f25"
+              "03652d01d282b607ac39da86105f7cc420d6a23d21bf5fe1a5f4bef0ef91435b2a"
             ]
           },
           "htlcBasepoint": {
             "case": "HtlcBasepoint",
             "fields": [
-              "02ce5c132f98a34e1c30c5321c2e645ae1c27ec6a09a02de4d10bd9be7fb15d459"
+              "03e2392d50fe1c8be20493155f7f30b218f8d2c50ce7e5975415121ad01add5779"
             ]
           }
         },
@@ -140,31 +135,31 @@ type ChannelMarshalling () =
           "fundingPubKey": {
             "case": "FundingPubKey",
             "fields": [
-              "03f099d2f4ca7aa42652f3ddc7a9c6ecbfa5512e8b189fd3be8d50086837a55b24"
+              "033c53bb43e3e05883e7b8192880466bada0569f06a23cf98406cd10530fc8bdec"
             ]
           },
           "revocationBasepoint": {
             "case": "RevocationBasepoint",
             "fields": [
-              "0264ec9bb3edff39f22f136375e0f19ef351f675e79b4194da4b515ffb0a7dd439"
+              "03ea342c09ddb0ad5d07af09b7b5bf4f974688ca4f1578a3713cab57c0767ef53c"
             ]
           },
           "paymentBasepoint": {
             "case": "PaymentBasepoint",
             "fields": [
-              "03a72a22006b8ed77ea71e411c4ec28c7b13831b5e19a69453bb497c905729676d"
+              "029669cdbdfedaa5d433cfd928a2c586891b9773b261792fada24292244a74ab72"
             ]
           },
           "delayedPaymentBasepoint": {
             "case": "DelayedPaymentBasepoint",
             "fields": [
-              "0378828c7f5ad4fdad208a6ef8c28a04d3eb25de818da87a932cc2a48cc2dd8f31"
+              "02acaf755e05582437f85aca2505e6aa28fe6884f44e0d84d0ecdb6cebf5ff497a"
             ]
           },
           "htlcBasepoint": {
             "case": "HtlcBasepoint",
             "fields": [
-              "032758d33a3ef2f2df68114cf6ae6899bb27e32b7039639a8daf27af0161f611c6"
+              "02c9d36c4b72310d8c8981ffd5891f3a4960b2db73c28cbcb1cbb57206ae0cb25b"
             ]
           }
         },
@@ -174,12 +169,12 @@ type ChannelMarshalling () =
       },
       "remotePerCommitmentSecrets": [],
       "historicalLocalCommits": {
-        "1af5826757294f310610a524445cc32030c66920e80a19cb76274256b47c15df": {
+        "71115f8f09d9a02bb9a310b38ef143dc795f22c8f405d36ca902cdccf2e6c0e6": {
           "index": 0,
           "perCommitmentPoint": {
             "case": "PerCommitmentPoint",
             "fields": [
-              "03405b92bc8e209b4a122c9da42d4fe0ab9d90b92002dc1b8bd2683e76a7b83403"
+              "024937d9f4a106e62525b9b9bcfee02b5dac100b2a61800be83dae2f66d2763e6f"
             ]
           },
           "spec": {
@@ -194,13 +189,13 @@ type ChannelMarshalling () =
             "toLocal": {
               "case": "LNMoney",
               "fields": [
-                0
+                10000000000
               ]
             },
             "toRemote": {
               "case": "LNMoney",
               "fields": [
-                10000000000
+                0
               ]
             }
           },
@@ -212,23 +207,23 @@ type ChannelMarshalling () =
                   "rbf": true,
                   "version": 2,
                   "totalOut": 9994050,
-                  "lockTime": 543945744,
+                  "lockTime": 539122062,
                   "inputs": [
                     {
-                      "sequence": 2163994788,
-                      "prevOut": "d3a9d4a9f81c5005dad93ece2f8c0ca8ad6e0258bbd8cff85a9b09712a22cf1700000000",
+                      "sequence": 2158724978,
+                      "prevOut": "2f1f1d004f9de2237bb2167f0a113aa18bef17aeaaf544a9e1e8055b46a8177800000000",
                       "scriptSig": "",
-                      "witScript": "040047304402201394df26356c5b2a4f141fd9242be7d64fce6a9848023a46260f068daa6ad450022072f2cac634d5e69767d0144db80310a4ee17edbcde5eeea67f6f443cb1b8ab3a014730440220780fbc0baeee53bfedc0d7a49ed32795e69ddf1856a6cefdbe63277dffe4fe8002200ea2b037ee3d9f220acc9bc2a3cf9a83546f5c816d13a33d9b8d96b2be5d78350147522102c50cf6d17bf83be3a2f8d4b3f9541ae6ca037445ab490e64f395a1d85f54023b2103f099d2f4ca7aa42652f3ddc7a9c6ecbfa5512e8b189fd3be8d50086837a55b2452ae",
+                      "witScript": "040047304402201e647fdedd1198326d06829eb8948b161452e5b2711cfcebbdb7b2f73d021f3d02205d2a1fb518deed9d38f1c84cb49611cac6e44aa7710e595148dc527487c6495a01483045022100c0971de70e9bd5e1412119794d78b17ea0ba8c2cd6ccf8afbbf1e2110b0387a30220383ace466207117f36cecf0397d56e4f11cf732cc7e2346649c852f8341c54e001475221033c53bb43e3e05883e7b8192880466bada0569f06a23cf98406cd10530fc8bdec2103f16ef5959b54c358eadd94689edbd4b62096b8d1a772ea1af91b3a4c4c42267d52ae",
                       "isFinal": false
                     }
                   ],
                   "outputs": [
                     {
-                      "scriptPubKey": "00204fa909b441dc7a42a1c62dc9247aecc01c576366f4f2540d7ea3e228b03ecdc7",
+                      "scriptPubKey": "00206b3e21d3a254ef7b3f1d0b344252474f10088be6490d1deac8b0f0e7da3b03ad",
                       "value": 330
                     },
                     {
-                      "scriptPubKey": "00208570b4745331e106f1dc29e9da50717e14331a41562b58709ddb4176654a6ecd",
+                      "scriptPubKey": "00207e3b6ef0353ae32061d92d0469414cc69bb947de0e694fa978acf9b4a5d2102c",
                       "value": 9993720
                     }
                   ],
@@ -243,7 +238,7 @@ type ChannelMarshalling () =
         }
       },
       "historicalRemoteCommits": {
-        "e4fbfb6cd1ca820f4d76f578b5f1ff3bb37318f5a28b15d3f106f1f4f5414317": {
+        "740888a0361671b1f0fafd4fd05089b41441095cdddce7c1248adc873584cd37": {
           "index": 0,
           "spec": {
             "outgoingHTLCs": {},
@@ -257,28 +252,29 @@ type ChannelMarshalling () =
             "toLocal": {
               "case": "LNMoney",
               "fields": [
-                10000000000
+                0
               ]
             },
             "toRemote": {
               "case": "LNMoney",
               "fields": [
-                0
+                10000000000
               ]
             }
           },
           "txId": {
             "case": "TxId",
             "fields": [
-              "e4fbfb6cd1ca820f4d76f578b5f1ff3bb37318f5a28b15d3f106f1f4f5414317"
+              "740888a0361671b1f0fafd4fd05089b41441095cdddce7c1248adc873584cd37"
             ]
           },
           "remotePerCommitmentPoint": {
             "case": "PerCommitmentPoint",
             "fields": [
-              "02e72e735ca8a51fa76793eff3f2b2c92a1df8a08541b9b44fe82f4f179188bcb0"
+              "03c3c978b5a8753f3bf18c6bc95af061d5d8f260ab76f3598a7ddc1df51c548ee5"
             ]
-          }
+          },
+          "sentAfterLocalCommitIndex": 0
         }
       },
       "shortChannelId": {
@@ -312,7 +308,7 @@ type ChannelMarshalling () =
         "perCommitmentPoint": {
           "case": "PerCommitmentPoint",
           "fields": [
-            "03405b92bc8e209b4a122c9da42d4fe0ab9d90b92002dc1b8bd2683e76a7b83403"
+            "024937d9f4a106e62525b9b9bcfee02b5dac100b2a61800be83dae2f66d2763e6f"
           ]
         },
         "spec": {
@@ -327,13 +323,13 @@ type ChannelMarshalling () =
           "toLocal": {
             "case": "LNMoney",
             "fields": [
-              0
+              10000000000
             ]
           },
           "toRemote": {
             "case": "LNMoney",
             "fields": [
-              10000000000
+              0
             ]
           }
         },
@@ -345,23 +341,23 @@ type ChannelMarshalling () =
                 "rbf": true,
                 "version": 2,
                 "totalOut": 9994050,
-                "lockTime": 543945744,
+                "lockTime": 539122062,
                 "inputs": [
                   {
-                    "sequence": 2163994788,
-                    "prevOut": "d3a9d4a9f81c5005dad93ece2f8c0ca8ad6e0258bbd8cff85a9b09712a22cf1700000000",
+                    "sequence": 2158724978,
+                    "prevOut": "2f1f1d004f9de2237bb2167f0a113aa18bef17aeaaf544a9e1e8055b46a8177800000000",
                     "scriptSig": "",
-                    "witScript": "040047304402201394df26356c5b2a4f141fd9242be7d64fce6a9848023a46260f068daa6ad450022072f2cac634d5e69767d0144db80310a4ee17edbcde5eeea67f6f443cb1b8ab3a014730440220780fbc0baeee53bfedc0d7a49ed32795e69ddf1856a6cefdbe63277dffe4fe8002200ea2b037ee3d9f220acc9bc2a3cf9a83546f5c816d13a33d9b8d96b2be5d78350147522102c50cf6d17bf83be3a2f8d4b3f9541ae6ca037445ab490e64f395a1d85f54023b2103f099d2f4ca7aa42652f3ddc7a9c6ecbfa5512e8b189fd3be8d50086837a55b2452ae",
+                    "witScript": "040047304402201e647fdedd1198326d06829eb8948b161452e5b2711cfcebbdb7b2f73d021f3d02205d2a1fb518deed9d38f1c84cb49611cac6e44aa7710e595148dc527487c6495a01483045022100c0971de70e9bd5e1412119794d78b17ea0ba8c2cd6ccf8afbbf1e2110b0387a30220383ace466207117f36cecf0397d56e4f11cf732cc7e2346649c852f8341c54e001475221033c53bb43e3e05883e7b8192880466bada0569f06a23cf98406cd10530fc8bdec2103f16ef5959b54c358eadd94689edbd4b62096b8d1a772ea1af91b3a4c4c42267d52ae",
                     "isFinal": false
                   }
                 ],
                 "outputs": [
                   {
-                    "scriptPubKey": "00204fa909b441dc7a42a1c62dc9247aecc01c576366f4f2540d7ea3e228b03ecdc7",
+                    "scriptPubKey": "00206b3e21d3a254ef7b3f1d0b344252474f10088be6490d1deac8b0f0e7da3b03ad",
                     "value": 330
                   },
                   {
-                    "scriptPubKey": "00208570b4745331e106f1dc29e9da50717e14331a41562b58709ddb4176654a6ecd",
+                    "scriptPubKey": "00207e3b6ef0353ae32061d92d0469414cc69bb947de0e694fa978acf9b4a5d2102c",
                     "value": 9993720
                   }
                 ],
@@ -388,28 +384,29 @@ type ChannelMarshalling () =
           "toLocal": {
             "case": "LNMoney",
             "fields": [
-              10000000000
+              0
             ]
           },
           "toRemote": {
             "case": "LNMoney",
             "fields": [
-              0
+              10000000000
             ]
           }
         },
         "txId": {
           "case": "TxId",
           "fields": [
-            "e4fbfb6cd1ca820f4d76f578b5f1ff3bb37318f5a28b15d3f106f1f4f5414317"
+            "740888a0361671b1f0fafd4fd05089b41441095cdddce7c1248adc873584cd37"
           ]
         },
         "remotePerCommitmentPoint": {
           "case": "PerCommitmentPoint",
           "fields": [
-            "02e72e735ca8a51fa76793eff3f2b2c92a1df8a08541b9b44fe82f4f179188bcb0"
+            "03c3c978b5a8753f3bf18c6bc95af061d5d8f260ab76f3598a7ddc1df51c548ee5"
           ]
-        }
+        },
+        "sentAfterLocalCommitIndex": 0
       },
       "localChanges": {
         "signed": [],
@@ -418,7 +415,8 @@ type ChannelMarshalling () =
       "remoteChanges": {
         "signed": [],
         "acKed": []
-      }
+      },
+      "remoteCurrentPerCommitmentPoint": null
     },
     "commitments": {
       "proposedLocalChanges": [],
@@ -446,7 +444,7 @@ type ChannelMarshalling () =
             {
               "case": "PerCommitmentPoint",
               "fields": [
-                "035c31dac7c37cb1d44c7532ef3a8c47b8bd0dafdfa6548d98e20ec2c9fd8840fb"
+                "034e075503d856199b38fd1397a54418165b3fbb35d40c68dc2ddad148c714611a"
               ]
             }
           ]
@@ -454,52 +452,42 @@ type ChannelMarshalling () =
       ]
     },
     "negotiatingState": {
-      "localRequestedShutdown": {
-        "case": "Some",
-        "fields": [
-          "a914684e8b042ae0437a9666e5ef695856208379713e87"
-        ]
-      },
-      "remoteRequestedShutdown": {
-        "case": "Some",
-        "fields": [
-          "a91488d22420f8d76ae5e48e3894385fa84a2ee4594d87"
-        ]
-      },
+      "localRequestedShutdown": null,
+      "remoteRequestedShutdown": null,
       "localClosingFeesProposed": [],
       "remoteClosingFeeProposed": null
     },
-    "accountFileName": "02ff2db62fb931e211665825b8fd39b6b78e08ee82522778739d14a1ddca764ba7",
+    "accountFileName": "02d16190f2ebba8678a98c1fdcf020766a7ea6a9768a46e704056db1b3cdf28dee",
     "forceCloseTxIdOpt": null,
     "localChannelPubKeys": {
       "fundingPubKey": {
         "case": "FundingPubKey",
         "fields": [
-          "03f099d2f4ca7aa42652f3ddc7a9c6ecbfa5512e8b189fd3be8d50086837a55b24"
+          "033c53bb43e3e05883e7b8192880466bada0569f06a23cf98406cd10530fc8bdec"
         ]
       },
       "revocationBasepoint": {
         "case": "RevocationBasepoint",
         "fields": [
-          "0264ec9bb3edff39f22f136375e0f19ef351f675e79b4194da4b515ffb0a7dd439"
+          "03ea342c09ddb0ad5d07af09b7b5bf4f974688ca4f1578a3713cab57c0767ef53c"
         ]
       },
       "paymentBasepoint": {
         "case": "PaymentBasepoint",
         "fields": [
-          "03a72a22006b8ed77ea71e411c4ec28c7b13831b5e19a69453bb497c905729676d"
+          "029669cdbdfedaa5d433cfd928a2c586891b9773b261792fada24292244a74ab72"
         ]
       },
       "delayedPaymentBasepoint": {
         "case": "DelayedPaymentBasepoint",
         "fields": [
-          "0378828c7f5ad4fdad208a6ef8c28a04d3eb25de818da87a932cc2a48cc2dd8f31"
+          "02acaf755e05582437f85aca2505e6aa28fe6884f44e0d84d0ecdb6cebf5ff497a"
         ]
       },
       "htlcBasepoint": {
         "case": "HtlcBasepoint",
         "fields": [
-          "032758d33a3ef2f2df68114cf6ae6899bb27e32b7039639a8daf27af0161f611c6"
+          "02c9d36c4b72310d8c8981ffd5891f3a4960b2db73c28cbcb1cbb57206ae0cb25b"
         ]
       }
     },
@@ -510,28 +498,22 @@ type ChannelMarshalling () =
     "broadcastedHtlcTxs": [],
     "broadcastedHtlcRecoveryTxs": [],
     "nodeTransportType": {
-      "case": "Server",
+      "case": "Client",
       "fields": [
         {
           "case": "Tcp",
           "fields": [
             [
-              "127.0.0.1",
+              "127.0.0.2",
               9735
             ]
           ]
         }
       ]
     },
-    "closingTimestampUtc": {
-      "case": "Some",
-      "fields": [
-        1661342681
-      ]
-    }
+    "closingTimestampUtc": null
   }
 }
-
 """
 
     [<Test>]
