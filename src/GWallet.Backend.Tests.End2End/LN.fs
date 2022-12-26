@@ -20,6 +20,19 @@ open GWallet.Backend.FSharpUtil
 open GWallet.Backend.FSharpUtil.UwpHacks
 
 
+module Helpers =
+    let RunAsyncTest (testJob: Async<unit>) =
+        let testName = (new System.Diagnostics.StackTrace()).GetFrame(1).GetMethod().Name
+        Console.WriteLine("*** Starting test: " + testName)
+        try
+            Async.RunSynchronously testJob
+        with
+        | exn ->
+            Console.WriteLine("*** CAUGHT EXCEPTION: " + exn.ToString())
+            reraise()
+        Console.WriteLine("*** Completed test: " + testName)
+
+
 [<TestFixture>]
 type LN() =
     do Config.SetRunModeToTesting()
@@ -32,6 +45,7 @@ type LN() =
         (lnd :> IDisposable).Dispose()
         (electrumServer :> IDisposable).Dispose()
         (bitcoind :> IDisposable).Dispose()
+        Console.WriteLine("*** TearDown completed successfully")
 
     let OpenChannelWithFundee (nodeOpt: Option<NodeEndPoint>) =
         async {
@@ -303,7 +317,7 @@ type LN() =
 
     [<Category "G2G_ChannelOpening_Funder">]
     [<Test>]
-    member __.``can open channel with geewallet (funder)``() = Async.RunSynchronously <| async {
+    member __.``can open channel with geewallet (funder)``() = Helpers.RunAsyncTest <| async {
         let! _channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
 
@@ -312,7 +326,7 @@ type LN() =
 
     [<Category "G2G_ChannelOpening_Fundee">]
     [<Test>]
-    member __.``can open channel with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can open channel with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, _channelId = AcceptChannelFromGeewalletFunder ()
 
         (serverWallet :> IDisposable).Dispose()
@@ -320,7 +334,7 @@ type LN() =
 
     [<Category "G2G_ChannelClosingAfterJustOpening_Funder">]
     [<Test>]
-    member __.``can close channel with geewallet (funder)``() = Async.RunSynchronously <| async {
+    member __.``can close channel with geewallet (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -340,7 +354,7 @@ type LN() =
 
     [<Category "G2G_ChannelClosingAfterJustOpening_Fundee">]
     [<Test>]
-    member __.``can close channel with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can close channel with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         let! closeChannelRes = Lightning.Network.AcceptCloseChannel serverWallet.NodeServer channelId
@@ -353,7 +367,7 @@ type LN() =
 
     [<Category "G2G_ChannelClosingAfterSendingHTLCPayments_Funder">]
     [<Test>]
-    member __.``can close channel after sending HTLC payments (funder)``() = Async.RunSynchronously <| async {
+    member __.``can close channel after sending HTLC payments (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -386,7 +400,7 @@ type LN() =
 
     [<Category "G2G_ChannelClosingAfterSendingHTLCPayments_Fundee">]
     [<Test>]
-    member __.``can close channel after receiving mono-hop unidirectional payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can close channel after receiving mono-hop unidirectional payments, with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
@@ -401,7 +415,7 @@ type LN() =
 
     [<Category "G2G_ChannelRemoteForceClosingByFunder_Funder">]
     [<Test>]
-    member __.``can send htlc payments and handle remote force-close of channel by funder (funder)``() = Async.RunSynchronously <| async {
+    member __.``can send htlc payments and handle remote force-close of channel by funder (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -487,7 +501,7 @@ type LN() =
 
     [<Category "G2G_ChannelRemoteForceClosingByFunder_Fundee">]
     [<Test>]
-    member __.``can receive htlc payments and handle remote force-close of channel by funder (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can receive htlc payments and handle remote force-close of channel by funder (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -540,7 +554,7 @@ type LN() =
 
     [<Category "G2G_ChannelRemoteForceClosingByFundee_Funder">]
     [<Test>]
-    member __.``can send htlc payments and handle remote force-close of channel by fundee (funder)``() = Async.RunSynchronously <| async {
+    member __.``can send htlc payments and handle remote force-close of channel by fundee (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -618,7 +632,7 @@ type LN() =
 
     [<Category "G2G_ChannelRemoteForceClosingByFundee_Fundee">]
     [<Test>]
-    member __.``can receive htlc payments and handle remote force-close of channel by fundee (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can receive htlc payments and handle remote force-close of channel by fundee (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -683,7 +697,7 @@ type LN() =
 
     [<Category "G2G_Revocation_Funder">]
     [<Test>]
-    member __.``can revoke commitment tx (funder)``() = Async.RunSynchronously <| async {
+    member __.``can revoke commitment tx (funder)``() = Helpers.RunAsyncTest <| async {
         use! walletInstance = ClientWalletInstance.New None
         use! bitcoind = Bitcoind.Start()
         use! _electrumServer = ElectrumServer.Start bitcoind
@@ -861,7 +875,7 @@ type LN() =
 
     [<Category "G2G_Revocation_Fundee">]
     [<Test>]
-    member __.``can revoke commitment tx (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can revoke commitment tx (fundee)``() = Helpers.RunAsyncTest <| async {
         use! walletInstance = ServerWalletInstance.New Config.FundeeLightningIPEndpoint (Some Config.FundeeAccountsPrivateKey)
         let! pendingChannelRes =
             Lightning.Network.AcceptChannel
@@ -923,7 +937,7 @@ type LN() =
 
     [<Category "G2G_CPFP_Funder">]
     [<Test>]
-    member __.``CPFP is used when force-closing channel (funder)``() = Async.RunSynchronously <| async {
+    member __.``CPFP is used when force-closing channel (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -994,7 +1008,7 @@ type LN() =
 
     [<Category "G2G_CPFP_Fundee">]
     [<Test>]
-    member __.``CPFP is used when force-closing channel (fundee)``() = Async.RunSynchronously <| async {
+    member __.``CPFP is used when force-closing channel (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -1048,7 +1062,7 @@ type LN() =
 
     [<Category "G2G_HtlcPayment_Funder">]
     [<Test>]
-    member __.``can send htlc payments, with geewallet (funder)``() = Async.RunSynchronously <| async {
+    member __.``can send htlc payments, with geewallet (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -1085,7 +1099,7 @@ type LN() =
 
     [<Category "G2G_HtlcPayment_Fundee">]
     [<Test>]
-    member __.``can receive htlc payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can receive htlc payments, with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
@@ -1111,7 +1125,7 @@ type LN() =
 
     [<Category "G2G_HtlcPaymentRevocationCloseByFunder_Funder">]
     [<Test>]
-    member __.``can send htlc payments with revocation (close by funder), with geewallet (funder)``() = Async.RunSynchronously <| async {
+    member __.``can send htlc payments with revocation (close by funder), with geewallet (funder)``() = Helpers.RunAsyncTest <| async {
         let invoiceFileFromFundeePath =
             Path.Combine (Path.GetTempPath(), "invoice-1.txt")
         let secondInvoiceFileFromFundeePath =
@@ -1247,7 +1261,7 @@ type LN() =
 
     [<Category "G2G_HtlcPaymentRevocationCloseByFunder_Fundee">]
     [<Test>]
-    member __.``can receive htlc payments with revocation (close by funder), with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can receive htlc payments with revocation (close by funder), with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
@@ -1344,7 +1358,7 @@ type LN() =
 
     [<Category "G2G_HtlcPaymentRevocationCloseByFundee_Funder">]
     [<Test>]
-    member __.``can send htlc payments with revocation (close by fundee), with geewallet (funder)``() = Async.RunSynchronously <| async {
+    member __.``can send htlc payments with revocation (close by fundee), with geewallet (funder)``() = Helpers.RunAsyncTest <| async {
         let invoiceFileFromFundeePath =
             Path.Combine (Path.GetTempPath(), "invoice-1.txt")
         let secondInvoiceFileFromFundeePath =
@@ -1510,7 +1524,7 @@ type LN() =
 
     [<Category "G2G_HtlcPaymentRevocationCloseByFundee_Fundee">]
     [<Test>]
-    member __.``can receive htlc payments with revocation (close by fundee), with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can receive htlc payments with revocation (close by fundee), with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
@@ -1606,7 +1620,7 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can open channel with LND``() = Async.RunSynchronously <| async {
+    member __.``can open channel with LND``() = Helpers.RunAsyncTest <| async {
         let! _channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = OpenChannelWithFundee None
 
         TearDown clientWallet bitcoind electrumServer lnd
@@ -1614,7 +1628,7 @@ type LN() =
 
     [<Category "G2G_ChannelLocalForceClosing_Funder">]
     [<Test>]
-    member __.``can send htlc payments and handle local force-close of channel (funder)``() = Async.RunSynchronously <| async {
+    member __.``can send htlc payments and handle local force-close of channel (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -1690,7 +1704,7 @@ type LN() =
 
     [<Category "G2G_ChannelLocalForceClosing_Fundee">]
     [<Test>]
-    member __.``can receive htlc payments and handle local force-close of channel (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can receive htlc payments and handle local force-close of channel (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -1719,7 +1733,7 @@ type LN() =
 
 
     [<Test>]
-    member __.``can open channel with LND and send htlcs``() = Async.RunSynchronously <| async {
+    member __.``can open channel with LND and send htlcs``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
 
         do! SendHtlcPaymentsToLnd clientWallet lnd channelId fundingAmount
@@ -1728,7 +1742,7 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can open channel with LND and send invalid htlc``() = Async.RunSynchronously <| async {
+    member __.``can open channel with LND and send invalid htlc``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
 
         let channelInfoBeforeAnyPayment = clientWallet.ChannelStore.ChannelInfo channelId
@@ -1774,14 +1788,14 @@ type LN() =
 
     [<Category "HtlcOnChainEnforce">]
     [<Test>]
-    member __.``can open channel with LND and send invalid htlc but settle on-chain (force close initiated by lnd)``() = Async.RunSynchronously <| async {
+    member __.``can open channel with LND and send invalid htlc but settle on-chain (force close initiated by lnd)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = OpenChannelWithFundee None
-
+        Console.WriteLine("*** line " + __LINE__)
         let channelInfo = clientWallet.ChannelStore.ChannelInfo channelId
         match channelInfo.Status with
         | ChannelStatus.Active -> ()
         | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
-
+        Console.WriteLine("*** line " + __LINE__)
         let! _sendHtlcPayment1Res =
             async {
                 let transferAmount =
@@ -1800,23 +1814,23 @@ type LN() =
                         (PaymentInvoice.Parse invoice.BOLT11)
                         false
             }
-
+        Console.WriteLine("*** line " + __LINE__)
         let fundingOutPoint =
             let fundingTxId = uint256(channelInfo.FundingTxId.ToString())
             let fundingOutPointIndex = channelInfo.FundingOutPointIndex
             OutPoint(fundingTxId, fundingOutPointIndex)
-
+        Console.WriteLine("*** line " + __LINE__)
         // We use `Async.Start` because close channel api doesn't return until close/sweep process is finished
         lnd.CloseChannel fundingOutPoint true |> Async.Start
-
+        Console.WriteLine("*** line " + __LINE__)
         do! Async.Sleep 5000
 
         // wait for force-close transaction to appear in mempool
         while bitcoind.GetTxIdsInMempool().Length = 0 do
             do! Async.Sleep 500
-
+        Console.WriteLine("*** line " + __LINE__)
         let! balanceBeforeFundsReclaimed = clientWallet.GetBalance()
-
+        Console.WriteLine("*** line " + __LINE__)
         bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
 
         let rec waitForClosingTx () =
@@ -1828,9 +1842,9 @@ type LN() =
                     do! Async.Sleep 500
                     return! waitForClosingTx()
             }
-
+        Console.WriteLine("*** line " + __LINE__)
         do! waitForClosingTx ()
-
+        Console.WriteLine("*** line " + __LINE__)
         let rec waitUntilReadyForBroadcastIsNotEmpty () =
             async {
                 let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
@@ -1843,7 +1857,7 @@ type LN() =
             }
 
         let! readyToBroadcastHtlcTxs = waitUntilReadyForBroadcastIsNotEmpty()
-
+        Console.WriteLine("*** line " + __LINE__)
         let rec broadcastUntilListIsEmpty (readyToBroadcastList: HtlcTxsList) (feeSum: Money) =
             async {
                 if readyToBroadcastList.IsEmpty() then
@@ -1858,14 +1872,15 @@ type LN() =
             }
 
         let! feesPaid = broadcastUntilListIsEmpty readyToBroadcastHtlcTxs Money.Zero
-
+        Console.WriteLine("*** line " + __LINE__)
         do! clientWallet.WaitForBalance (balanceBeforeFundsReclaimed + walletToWalletTestPayment1Amount - feesPaid) |> Async.Ignore
-
+        Console.WriteLine("*** line " + __LINE__)
         TearDown clientWallet bitcoind electrumServer lnd
+        Console.WriteLine("*** line " + __LINE__)
     }
 
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs``() = Async.RunSynchronously <| async {
+    member __.``can accept channel from LND and receive htlcs``() = Helpers.RunAsyncTest <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
 
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
@@ -1915,16 +1930,17 @@ type LN() =
 
     [<Category "HtlcOnChainEnforce">]
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by lnd)``() = Async.RunSynchronously <| async {
+    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by lnd)``() = Helpers.RunAsyncTest <| async {
+        Console.WriteLine("*** line " + __LINE__)
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
-
+        Console.WriteLine("*** line " + __LINE__)
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
         match channelInfoBeforeAnyPayment.Status with
         | ChannelStatus.Active -> ()
         | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
 
         let invoiceManager = InvoiceManagement (serverWallet.Account :?> NormalUtxoAccount, serverWallet.Password)
-
+        Console.WriteLine("*** line " + __LINE__)
         let sendLndPayment1Job = async {
             // Wait for lnd to recognize we're online
             do! Async.Sleep 10000
@@ -1943,7 +1959,7 @@ type LN() =
         }
 
         let! (_, receiveLightningEventResult) = AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
-
+        Console.WriteLine("*** line " + __LINE__)
         match receiveLightningEventResult with
         | IncomingChannelEvent.HtlcPayment status ->
             Assert.AreEqual (HtlcSettleStatus.NotSettled, status, "htlc payment got settled")
@@ -1957,20 +1973,20 @@ type LN() =
                 let fundingTxId = uint256(channelInfoAfterPayment1.FundingTxId.ToString())
                 let fundingOutPointIndex = channelInfoAfterPayment1.FundingOutPointIndex
                 OutPoint(fundingTxId, fundingOutPointIndex)
-
+            Console.WriteLine("*** line " + __LINE__)
             // We use `Async.Start` because close channel api doesn't return until close/sweep process is finished
             lnd.CloseChannel fundingOutPoint true |> Async.Start
-
+            Console.WriteLine("*** line " + __LINE__)
             do! Async.Sleep 5000
-
+            
             // wait for force-close transaction to appear in mempool
             while bitcoind.GetTxIdsInMempool().Length = 0 do
                 do! Async.Sleep 500
-
+            Console.WriteLine("*** line " + __LINE__)
             let! balanceBeforeFundsReclaimed = serverWallet.GetBalance()
-
+            Console.WriteLine("*** line " + __LINE__)
             bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
-
+            Console.WriteLine("*** line " + __LINE__)
             let rec waitForClosingTx () =
                 async {
                     let! result = ChainWatcher.CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId serverWallet.ChannelStore
@@ -1982,7 +1998,7 @@ type LN() =
                 }
 
             do! waitForClosingTx ()
-
+            Console.WriteLine("*** line " + __LINE__)
             let rec waitUntilReadyForBroadcastIsNotEmpty () =
                 async {
                     let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
@@ -1995,7 +2011,7 @@ type LN() =
                 }
 
             let! readyToBroadcastHtlcTxs = waitUntilReadyForBroadcastIsNotEmpty()
-
+            Console.WriteLine("*** line " + __LINE__)
             let rec broadcastUntilListIsEmpty (readyToBroadcastList: HtlcTxsList) (feeSum: Money) =
                 async {
                     if readyToBroadcastList.IsEmpty() then
@@ -2009,28 +2025,28 @@ type LN() =
                 }
 
             let! feesPaid = broadcastUntilListIsEmpty readyToBroadcastHtlcTxs Money.Zero
-
+            Console.WriteLine("*** line " + __LINE__)
             do! serverWallet.WaitForBalance (balanceBeforeFundsReclaimed + walletToWalletTestPayment1Amount - feesPaid) |> Async.Ignore
-
+            Console.WriteLine("*** line " + __LINE__)
         | _ ->
             Assert.Fail "received non-htlc lightning event"
-
+        Console.WriteLine("*** line " + __LINE__)
         TearDown serverWallet bitcoind electrumServer lnd
     }
     [<Category "HtlcOnChainEnforce">]
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by geewallet)``() = Async.RunSynchronously <| async {
+    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by geewallet)``() = Helpers.RunAsyncTest <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
-
+        Console.WriteLine("*** line " + __LINE__)
         do! serverWallet.FundByMining bitcoind lnd
-
+        Console.WriteLine("*** line " + __LINE__)
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
         match channelInfoBeforeAnyPayment.Status with
         | ChannelStatus.Active -> ()
         | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
-
+        Console.WriteLine("*** line " + __LINE__)
         let invoiceManager = InvoiceManagement (serverWallet.Account :?> NormalUtxoAccount, serverWallet.Password)
-
+        Console.WriteLine("*** line " + __LINE__)
         let sendLndPayment1Job = async {
             // Wait for lnd to recognize we're online
             do! Async.Sleep 10000
@@ -2049,7 +2065,7 @@ type LN() =
         }
 
         let! (_, receiveLightningEventResult) = AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
-
+        Console.WriteLine("*** line " + __LINE__)
         match receiveLightningEventResult with
         | IncomingChannelEvent.HtlcPayment status ->
             Assert.AreEqual (HtlcSettleStatus.NotSettled, status, "htlc payment got settled")
@@ -2058,7 +2074,7 @@ type LN() =
             match channelInfoAfterPayment1.Status with
             | ChannelStatus.Active -> ()
             | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
-
+            Console.WriteLine("*** line " + __LINE__)
             let! _forceCloseTxId = (Lightning.Node.Server serverWallet.NodeServer).ForceCloseChannel channelId
 
             let locallyForceClosedData =
@@ -2066,16 +2082,16 @@ type LN() =
                 | ChannelStatus.LocallyForceClosed locallyForceClosedData ->
                     locallyForceClosedData
                 | status -> failwith (SPrintF1 "unexpected channel status. Expected LocallyForceClosed, got %A" status)
-
+            Console.WriteLine("*** line " + __LINE__)
             // wait for force-close transaction to appear in mempool
             while bitcoind.GetTxIdsInMempool().Length = 0 do
                 do! Async.Sleep 500
 
             // Mine the force-close tx into a block
             bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
-
+            Console.WriteLine("*** line " + __LINE__)
             let! balanceBeforeFundsReclaimed = serverWallet.GetBalance()
-
+            Console.WriteLine("*** line " + __LINE__)
             let rec waitForClosingTx () =
                 async {
                     Console.WriteLine "Looking for closing tx"
@@ -2088,7 +2104,7 @@ type LN() =
                 }
 
             do! waitForClosingTx ()
-
+            Console.WriteLine("*** line " + __LINE__)
             let rec waitUntilReadyForBroadcastIsNotEmpty () =
                 async {
                     let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
@@ -2102,7 +2118,7 @@ type LN() =
                 }
 
             let! readyToBroadcastHtlcTxs = waitUntilReadyForBroadcastIsNotEmpty()
-
+            Console.WriteLine("*** line " + __LINE__)
             let rec broadcastUntilListIsEmpty (readyToBroadcastList: HtlcTxsList) (feeSum: Money) =
                 async {
                     if readyToBroadcastList.IsEmpty() then
@@ -2120,7 +2136,7 @@ type LN() =
             let! feesPaidFor2ndStageHtlcTx = broadcastUntilListIsEmpty readyToBroadcastHtlcTxs Money.Zero
 
             bitcoind.GenerateBlocksToDummyAddress (locallyForceClosedData.ToSelfDelay |> uint32 |> BlockHeightOffset32)
-
+            Console.WriteLine("*** line " + __LINE__)
             let rec checkForReadyToSpend2ndStageClaim ()  =
                 async {
                     let! readyForBroadcast = ChainWatcher.CheckForReadyToSpendDelayedHtlcTransactions channelId serverWallet.ChannelStore
@@ -2151,9 +2167,9 @@ type LN() =
                         }
                     return! broadcastSpendingTxs recoveryTxs Money.Zero
                 }
-
+            Console.WriteLine("*** line " + __LINE__)
             let! feePaidForClaiming2ndtSage = spend2ndStages readyToSpend2ndStages
-
+            Console.WriteLine("*** line " + __LINE__)
             do! serverWallet.WaitForBalance (balanceBeforeFundsReclaimed + walletToWalletTestPayment1Amount - feesPaidFor2ndStageHtlcTx - feePaidForClaiming2ndtSage) |> Async.Ignore
 
         | _ ->
@@ -2164,14 +2180,14 @@ type LN() =
 
     [<Test>]
     [<Category "HtlcOnChainEnforce">]
-    member __.``can accept channel from LND and send invalid htlc but settle on-chain (force close initiated by geewallet)``() = Async.RunSynchronously <| async {
+    member __.``can accept channel from LND and send invalid htlc but settle on-chain (force close initiated by geewallet)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = OpenChannelWithFundee None
-
+        Console.WriteLine("*** line " + __LINE__)
         let channelInfo = clientWallet.ChannelStore.ChannelInfo channelId
         match channelInfo.Status with
         | ChannelStatus.Active -> ()
         | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
-
+        Console.WriteLine("*** line " + __LINE__)
         let! _sendHtlcPayment1Res =
             async {
                 let transferAmount =
@@ -2190,30 +2206,30 @@ type LN() =
                         (PaymentInvoice.Parse invoice.BOLT11)
                         false
             }
-
+        Console.WriteLine("*** line " + __LINE__)
         let! _forceCloseTxId = (Lightning.Node.Client clientWallet.NodeClient).ForceCloseChannel channelId
-
+        Console.WriteLine("*** line " + __LINE__)
         let locallyForceClosedData =
             match (clientWallet.ChannelStore.ChannelInfo channelId).Status with
             | ChannelStatus.LocallyForceClosed locallyForceClosedData ->
                 locallyForceClosedData
             | status -> failwith (SPrintF1 "unexpected channel status. Expected LocallyForceClosed, got %A" status)
-
+        Console.WriteLine("*** line " + __LINE__)
         // wait for force-close transaction to appear in mempool
         while bitcoind.GetTxIdsInMempool().Length = 0 do
             do! Async.Sleep 500
 
         Infrastructure.LogDebug (SPrintF1 "the time lock is %i blocks" locallyForceClosedData.ToSelfDelay)
-
+        Console.WriteLine("*** line " + __LINE__)
         // wait for force-close transaction to appear in mempool
         while bitcoind.GetTxIdsInMempool().Length = 0 do
             do! Async.Sleep 500
 
         // Mine the force-close tx into a block
         bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
-
+        Console.WriteLine("*** line " + __LINE__)
         let! balanceBeforeFundsReclaimed = clientWallet.GetBalance()
-
+        Console.WriteLine("*** line " + __LINE__)
         let rec waitForClosingTx () =
             async {
                 Console.WriteLine "Looking for closing tx"
@@ -2226,7 +2242,7 @@ type LN() =
             }
 
         do! waitForClosingTx ()
-
+        Console.WriteLine("*** line " + __LINE__)
         let rec waitUntilReadyForBroadcastIsNotEmpty () =
             async {
                 let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId clientWallet.ChannelStore
@@ -2240,7 +2256,7 @@ type LN() =
             }
 
         let! readyToBroadcastHtlcTxs = waitUntilReadyForBroadcastIsNotEmpty()
-
+        Console.WriteLine("*** line " + __LINE__)
         let rec broadcastUntilListIsEmpty (readyToBroadcastList: HtlcTxsList) (feeSum: Money) =
             async {
                 if readyToBroadcastList.IsEmpty() then
@@ -2254,11 +2270,11 @@ type LN() =
 
                     return! broadcastUntilListIsEmpty rest (feeSum + (Money.Satoshis htlcTx.Fee.EstimatedFeeInSatoshis))
             }
-
+        
         let! feesPaidFor2ndStageHtlcTx = broadcastUntilListIsEmpty readyToBroadcastHtlcTxs Money.Zero
 
         bitcoind.GenerateBlocksToDummyAddress (locallyForceClosedData.ToSelfDelay |> uint32 |> BlockHeightOffset32)
-
+        Console.WriteLine("*** line " + __LINE__)
         let rec checkForReadyToSpend2ndStageClaim ()  =
             async {
                 let! readyForBroadcast = ChainWatcher.CheckForReadyToSpendDelayedHtlcTransactions channelId clientWallet.ChannelStore
@@ -2272,7 +2288,7 @@ type LN() =
             }
 
         let! readyToSpend2ndStages = checkForReadyToSpend2ndStageClaim()
-
+        Console.WriteLine("*** line " + __LINE__)
         let rec spend2ndStages (readyToSpend2ndStages: List<AmountInSatoshis * TransactionIdentifier>)  =
             async {
                 let! recoveryTxs = (Lightning.Node.Client clientWallet.NodeClient).CreateRecoveryTxForDelayedHtlcTx channelId readyToSpend2ndStages
@@ -2291,14 +2307,14 @@ type LN() =
             }
 
         let! feePaidForClaiming2ndtSage = spend2ndStages readyToSpend2ndStages
-
+        Console.WriteLine("*** line " + __LINE__)
         do! clientWallet.WaitForBalance (balanceBeforeFundsReclaimed + walletToWalletTestPayment1Amount - feesPaidFor2ndStageHtlcTx - feePaidForClaiming2ndtSage) |> Async.Ignore
 
         TearDown clientWallet bitcoind electrumServer lnd
     }
 
     [<Test>]
-    member __.``can close channel with LND``() = Async.RunSynchronously <| async {
+    member __.``can close channel with LND``() = Helpers.RunAsyncTest <| async {
 
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
@@ -2347,14 +2363,14 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can accept channel from LND``() = Async.RunSynchronously <| async {
+    member __.``can accept channel from LND``() = Helpers.RunAsyncTest <| async {
         let! _channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
 
         TearDown serverWallet bitcoind electrumServer lnd
     }
 
     [<Test>]
-    member __.``can accept channel closure from LND``() = Async.RunSynchronously <| async {
+    member __.``can accept channel closure from LND``() = Helpers.RunAsyncTest <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd =
             try
                 AcceptChannelFromLndFunder ()
@@ -2417,7 +2433,7 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can force-close channel with lnd``() = Async.RunSynchronously <| async {
+    member __.``can force-close channel with lnd``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee None
@@ -2482,7 +2498,7 @@ type LN() =
 
     [<Category "G2G_UpdateFeeMsg_Funder">]
     [<Test>]
-    member __.``can update fee after sending htlc payments (funder)``() = Async.RunSynchronously <| async {
+    member __.``can update fee after sending htlc payments (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -2534,7 +2550,7 @@ type LN() =
 
     [<Category "G2G_UpdateFeeMsg_Fundee">]
     [<Test>]
-    member __.``can accept fee update after receiving htlc payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can accept fee update after receiving htlc payments, with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -2587,7 +2603,7 @@ type LN() =
 
     [<Category "G2G_MutualCloseCpfp_Funder">]
     [<Test>]
-    member __.``can CPFP on mutual close (funder)``() = Async.RunSynchronously <| async {
+    member __.``can CPFP on mutual close (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -2620,7 +2636,7 @@ type LN() =
 
     [<Category "G2G_MutualCloseCpfp_Fundee">]
     [<Test>]
-    member __.``can CPFP on mutual close  (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can CPFP on mutual close  (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
@@ -2689,6 +2705,7 @@ type LN() =
 
     [<SetUp>]
     member __.Init() =
+        Console.WriteLine("*** Time: " +  System.DateTime.Now.ToShortTimeString())
         let delete (fileName) =
             let invoiceFileFromFundeePath =
                 Path.Combine (Path.GetTempPath(), fileName)
