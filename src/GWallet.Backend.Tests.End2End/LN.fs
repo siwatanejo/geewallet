@@ -20,6 +20,19 @@ open GWallet.Backend.FSharpUtil
 open GWallet.Backend.FSharpUtil.UwpHacks
 
 
+module Helpers =
+    let RunAsyncTest (testJob: Async<unit>) =
+        let testName = (new System.Diagnostics.StackTrace()).GetFrame(1).GetMethod().Name
+        Console.WriteLine("*** Starting test: " + testName)
+        try
+            Async.RunSynchronously testJob
+        with
+        | exn ->
+            Console.WriteLine("*** CAUGHT EXCEPTION: " + exn.ToString())
+            reraise()
+        Console.WriteLine("*** Completed test: " + testName)
+
+
 [<TestFixture>]
 type LN() =
     do Config.SetRunModeToTesting()
@@ -32,6 +45,7 @@ type LN() =
         (lnd :> IDisposable).Dispose()
         (electrumServer :> IDisposable).Dispose()
         (bitcoind :> IDisposable).Dispose()
+        Console.WriteLine("*** TearDown completed successfully")
 
     let OpenChannelWithFundee (nodeOpt: Option<NodeEndPoint>) =
         async {
@@ -347,7 +361,7 @@ type LN() =
 
     [<Category "G2G_ChannelOpening_Funder">]
     [<Test>]
-    member __.``can open channel with geewallet (funder)``() = Async.RunSynchronously <| async {
+    member __.``can open channel with geewallet (funder)``() = Helpers.RunAsyncTest <| async {
         let! _channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
 
@@ -356,7 +370,7 @@ type LN() =
 
     [<Category "G2G_ChannelOpening_Fundee">]
     [<Test>]
-    member __.``can open channel with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can open channel with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, _channelId = AcceptChannelFromGeewalletFunder ()
 
         (serverWallet :> IDisposable).Dispose()
@@ -364,7 +378,7 @@ type LN() =
 
     [<Category "G2G_ChannelClosingAfterJustOpening_Funder">]
     [<Test>]
-    member __.``can close channel with geewallet (funder)``() = Async.RunSynchronously <| async {
+    member __.``can close channel with geewallet (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -384,7 +398,7 @@ type LN() =
 
     [<Category "G2G_ChannelClosingAfterJustOpening_Fundee">]
     [<Test>]
-    member __.``can close channel with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can close channel with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         let! closeChannelRes = Lightning.Network.AcceptCloseChannel serverWallet.NodeServer channelId
@@ -460,7 +474,7 @@ type LN() =
 
     [<Category "G2G_ChannelClosingAfterSendingMonoHopPayments_Fundee">]
     [<Test>]
-    member __.``can close channel after receiving mono-hop unidirectional payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can close channel after receiving mono-hop unidirectional payments, with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         do! ReceiveMonoHopPayments serverWallet channelId
@@ -853,7 +867,7 @@ type LN() =
 
     [<Category "G2G_ChannelRemoteForceClosingByFundee_Funder">]
     [<Test>]
-    member __.``can send monohop payments and handle remote force-close of channel by fundee (funder)``() = Async.RunSynchronously <| async {
+    member __.``can send monohop payments and handle remote force-close of channel by fundee (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -930,7 +944,7 @@ type LN() =
 
     [<Category "G2G_ChannelRemoteForceClosingByFundee_Fundee">]
     [<Test>]
-    member __.``can receive monohop payments and handle remote force-close of channel by fundee (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can receive monohop payments and handle remote force-close of channel by fundee (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -1189,7 +1203,7 @@ type LN() =
 
     [<Category "G2G_Revocation_Fundee">]
     [<Test>]
-    member __.``can revoke commitment tx (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can revoke commitment tx (fundee)``() = Helpers.RunAsyncTest <| async {
         use! walletInstance = ServerWalletInstance.New Config.FundeeLightningIPEndpoint (Some Config.FundeeAccountsPrivateKey)
         let! pendingChannelRes =
             Lightning.Network.AcceptChannel
@@ -1255,7 +1269,7 @@ type LN() =
 
     [<Category "G2G_CPFP_Funder">]
     [<Test>]
-    member __.``CPFP is used when force-closing channel (funder)``() = Async.RunSynchronously <| async {
+    member __.``CPFP is used when force-closing channel (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -1325,7 +1339,7 @@ type LN() =
 
     [<Category "G2G_CPFP_Fundee">]
     [<Test>]
-    member __.``CPFP is used when force-closing channel (fundee)``() = Async.RunSynchronously <| async {
+    member __.``CPFP is used when force-closing channel (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -1378,7 +1392,7 @@ type LN() =
 
     [<Category "G2G_UpdateFeeMsg_Funder">]
     [<Test>]
-    member __.``can update fee after sending monohop payments (funder)``() = Async.RunSynchronously <| async {
+    member __.``can update fee after sending monohop payments (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -1430,7 +1444,7 @@ type LN() =
 
     [<Category "G2G_UpdateFeeMsg_Fundee">]
     [<Test>]
-    member __.``can accept fee update after receiving mono-hop unidirectional payments, with geewallet (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can accept fee update after receiving mono-hop unidirectional payments, with geewallet (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId =
             try
                 AcceptChannelFromGeewalletFunder ()
@@ -1482,7 +1496,7 @@ type LN() =
 
     [<Category "G2G_MutualCloseCpfp_Funder">]
     [<Test>]
-    member __.``can CPFP on mutual close (funder)``() = Async.RunSynchronously <| async {
+    member __.``can CPFP on mutual close (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount =
             try
                 OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
@@ -1514,7 +1528,7 @@ type LN() =
 
     [<Category "G2G_MutualCloseCpfp_Fundee">]
     [<Test>]
-    member __.``can CPFP on mutual close  (fundee)``() = Async.RunSynchronously <| async {
+    member __.``can CPFP on mutual close  (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder ()
 
         do! ReceiveMonoHopPayments serverWallet channelId
