@@ -2813,7 +2813,7 @@ type LN() =
     }
     
     [<Test>]
-    member __.``reestablish is correct for channels in sync``() = Async.RunSynchronously <| async {
+    member __.``reestablish is correct for channels in sync``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
 
         let checkReestablish () = 
@@ -2842,7 +2842,7 @@ type LN() =
     }
 
     [<Test>]
-    member __.``reestablish is correct when local node fell behind remote``() = Async.RunSynchronously <| async {
+    member __.``reestablish is correct when local node fell behind remote``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, fundingAmount = OpenChannelWithFundee None
         
         let channelStateBeforePayment = clientWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
@@ -2999,7 +2999,7 @@ type LN() =
 
     [<Test>]
     [<Category "G2G_ReestablishRemoteLate_Fundee">]
-    member __.``reestablish is correct when remote node is behind local (fundee)``() = Async.RunSynchronously <| async {
+    member __.``reestablish is correct when remote node is behind local (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder()
         
         let channelStateBeforePayment = serverWallet.ChannelStore.LoadChannel(channelId).SavedChannelState
@@ -3018,7 +3018,7 @@ type LN() =
     
     [<Test>]
     [<Category "G2G_ReestablishRemoteLate_Funder">]
-    member __.``reestablish is correct when remote node is behind local (funder)``() = Async.RunSynchronously <| async {
+    member __.``reestablish is correct when remote node is behind local (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = 
             OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
         
@@ -3044,7 +3044,7 @@ type LN() =
 
     [<Test>]
     [<Category "G2G_ReestablishRemoteLying_Fundee">]
-    member __.``reestablish is correct when remote node has wrong data_loss_protect (fundee)``() = Async.RunSynchronously <| async {
+    member __.``reestablish is correct when remote node has wrong data_loss_protect (fundee)``() = Helpers.RunAsyncTest <| async {
         let! serverWallet, channelId = AcceptChannelFromGeewalletFunder()
         
         do! ReceiveHtlcPaymentToGW channelId serverWallet "invoice.txt" |> Async.Ignore
@@ -3076,7 +3076,7 @@ type LN() =
     
     [<Test>]
     [<Category "G2G_ReestablishRemoteLying_Funder">]
-    member __.``reestablish is correct when remote node has wrong data_loss_protect (funder)``() = Async.RunSynchronously <| async {
+    member __.``reestablish is correct when remote node has wrong data_loss_protect (funder)``() = Helpers.RunAsyncTest <| async {
         let! channelId, clientWallet, bitcoind, electrumServer, lnd, _fundingAmount = 
             OpenChannelWithFundee (Some Config.FundeeNodeEndpoint)
         
