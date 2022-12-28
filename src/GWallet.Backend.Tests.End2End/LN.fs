@@ -923,7 +923,7 @@ type LN() =
         bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
 
         // Give the fundee time to see their funds recovered before closing bitcoind/electrum
-        do! Async.Sleep 10000
+        do! Async.Sleep 20000
 
         TearDown clientWallet bitcoind electrumServer lnd
     }
@@ -1144,7 +1144,7 @@ type LN() =
             walletInstance.GetBalance()
 
         // give the fundee plenty of time to broadcast the penalty tx
-        do! Async.Sleep 10000
+        do! Async.Sleep 20000
 
         // mine enough blocks to allow broadcasting the spending tx
         let toSelfDelay = walletInstance.ChannelStore.GetToSelfDelay channelId
@@ -1180,7 +1180,7 @@ type LN() =
                 accountBalanceAfterSpendingTheftTx
 
         // give the fundee plenty of time to see that their tx was mined
-        do! Async.Sleep 10000
+        do! Async.Sleep 20000
 
         TearDown walletInstance bitcoind electrumServer lnd
 
