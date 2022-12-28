@@ -422,6 +422,7 @@ type NodeServer internal (channelStore: ChannelStore, transportListener: Transpo
                 self.TransportListener
                 self.ChannelStore.Currency
                 None
+        Console.WriteLine(SPrintF2 "*** line %s of %s" __LINE__ __SOURCE_FILE__)
         match acceptPeerRes with
         | Error connectError ->
             if connectError.PossibleBug then
@@ -438,6 +439,7 @@ type NodeServer internal (channelStore: ChannelStore, transportListener: Transpo
                 return Error (NodeOpenChannelError.InitMsgValidation validationError :> IErrorMsg)
             | Ok _ ->
                 let! fundedChannelRes = FundedChannel.AcceptChannel peerNode self.Account
+                Console.WriteLine(SPrintF2 "*** line %s of %s" __LINE__ __SOURCE_FILE__)
                 match fundedChannelRes with
                 | Error acceptChannelError ->
                     if acceptChannelError.PossibleBug then
@@ -453,6 +455,7 @@ type NodeServer internal (channelStore: ChannelStore, transportListener: Transpo
                     let channelId = fundedChannel.ChannelId
                     let txId = fundedChannel.FundingTxId
                     (fundedChannel :> IDisposable).Dispose()
+                    Console.WriteLine(SPrintF2 "*** line %s of %s" __LINE__ __SOURCE_FILE__)
                     return Ok (channelId, txId)
     }
 
@@ -584,6 +587,7 @@ type NodeServer internal (channelStore: ChannelStore, transportListener: Transpo
                     self.ChannelStore
                     self.TransportListener
                     channelId
+            Console.WriteLine(SPrintF2 "*** line %s of %s" __LINE__ __SOURCE_FILE__)
             match activeChannelRes with
             | Error reconnectActiveChannelError ->
                 if reconnectActiveChannelError.PossibleBug then
@@ -597,6 +601,7 @@ type NodeServer internal (channelStore: ChannelStore, transportListener: Transpo
                 return Error (reconnectActiveChannelError :> IErrorMsg)
             | Ok activeChannel ->
                 (activeChannel :> IDisposable).Dispose()
+                Console.WriteLine(SPrintF2 "*** line %s of %s" __LINE__ __SOURCE_FILE__)
                 return Ok ()
         }
 
