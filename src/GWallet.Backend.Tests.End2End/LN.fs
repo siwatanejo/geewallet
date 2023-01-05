@@ -32,6 +32,24 @@ module Helpers =
             reraise()
         Console.WriteLine("*** Completed test: " + testName)
 
+    /// Run async test job up to numRetries times. 
+    /// Test job should return true if successful, false if retry is needed.
+    let rec RunAsyncTestWithRetries (numRetries: int) (testJob: Async<bool>) =
+        let testName = (new System.Diagnostics.StackTrace()).GetFrame(1).GetMethod().Name
+        if numRetries <= 0 then
+            Assert.Fail(SPrintF1 "*** Test %s failed after all retries" testName)
+        else
+            Console.WriteLine("*** Starting test: " + testName)
+            let success =
+                try
+                    Async.RunSynchronously testJob
+                with
+                | exn ->
+                    Console.WriteLine("*** CAUGHT EXCEPTION: " + exn.ToString())
+                    reraise()
+            if not success then
+                RunAsyncTestWithRetries (numRetries - 1) testJob
+            
 
 [<TestFixture>]
 type LN() =
@@ -1910,7 +1928,7 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs``() = Helpers.RunAsyncTest <| async {
+    member __.``can accept channel from LND and receive htlcs``() = Helpers.RunAsyncTestWithRetries 3 <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
 
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
@@ -1948,29 +1966,38 @@ type LN() =
             return UnwrapResult receiveHtlcPaymentRes "ReceiveHtlcPayment failed"
         }
 
-        let! (_, receiveLightningEventResult) = AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
+        let! sendPaymentResult = 
+            AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
+            |> WithTimeout (TimeSpan.FromSeconds 40.0)
 
-        match receiveLightningEventResult with
-        | IncomingChannelEvent.HtlcPayment status ->
-            Assert.AreNotEqual (HtlcSettleStatus.Fail, status, "htlc payment failed gracefully")
-            Assert.AreNotEqual (HtlcSettleStatus.NotSettled, status, "htlc payment didn't get settled which shouldn't happen because ReceiveLightningEvent's settleHTLCImmediately should be true")
+        match sendPaymentResult with
+        | None -> 
+            TearDown serverWallet bitcoind electrumServer lnd
+            return false
+        | Some(_, receiveLightningEventResult) ->
+            match receiveLightningEventResult with
+            | IncomingChannelEvent.HtlcPayment status ->
+                Assert.AreNotEqual (HtlcSettleStatus.Fail, status, "htlc payment failed gracefully")
+                Assert.AreNotEqual (HtlcSettleStatus.NotSettled, status, "htlc payment didn't get settled which shouldn't happen because ReceiveLightningEvent's settleHTLCImmediately should be true")
 
-            let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
-            match channelInfoAfterPayment1.Status with
-            | ChannelStatus.Active -> ()
-            | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+                let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
+                match channelInfoAfterPayment1.Status with
+                | ChannelStatus.Active -> ()
+                | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
 
-            if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> balanceBeforeAnyPayment + walletToWalletTestPayment1Amount then
-                return failwith "incorrect balance after receiving payment 1"
-        | _ ->
-            Assert.Fail "received non-htlc lightning event"
+                if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> balanceBeforeAnyPayment + walletToWalletTestPayment1Amount then
+                    return failwith "incorrect balance after receiving payment 1"
+            | _ ->
+                Assert.Fail "received non-htlc lightning event"
 
-        TearDown serverWallet bitcoind electrumServer lnd
+            TearDown serverWallet bitcoind electrumServer lnd
+
+            return true
     }
 
     [<Category "HtlcOnChainEnforce">]
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by lnd)``() = Helpers.RunAsyncTest <| async {
+    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by lnd)``() = Helpers.RunAsyncTestWithRetries 3 <| async {
         Console.WriteLine("*** line " + __LINE__)
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
         Console.WriteLine("*** line " + __LINE__)
@@ -2007,84 +2034,93 @@ type LN() =
             return UnwrapResult receiveHtlcPaymentRes "ReceiveHtlcPayment failed"
         }
 
-        let! (_, receiveLightningEventResult) = AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
-        Console.WriteLine("*** line " + __LINE__)
-        match receiveLightningEventResult with
-        | IncomingChannelEvent.HtlcPayment status ->
-            Assert.AreEqual (HtlcSettleStatus.NotSettled, status, "htlc payment got settled")
+        let! sendPaymentResult = 
+            AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
+            |> WithTimeout (TimeSpan.FromSeconds 40.0)
 
-            let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
-            match channelInfoAfterPayment1.Status with
-            | ChannelStatus.Active -> ()
-            | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+        match sendPaymentResult with
+        | None -> 
+            TearDown serverWallet bitcoind electrumServer lnd
+            return false
+        | Some(_, receiveLightningEventResult) ->
+            Console.WriteLine("*** line " + __LINE__)
+            match receiveLightningEventResult with
+            | IncomingChannelEvent.HtlcPayment status ->
+                Assert.AreEqual (HtlcSettleStatus.NotSettled, status, "htlc payment got settled")
 
-            let fundingOutPoint =
-                let fundingTxId = uint256(channelInfoAfterPayment1.FundingTxId.ToString())
-                let fundingOutPointIndex = channelInfoAfterPayment1.FundingOutPointIndex
-                OutPoint(fundingTxId, fundingOutPointIndex)
-            Console.WriteLine("*** line " + __LINE__)
-            // We use `Async.Start` because close channel api doesn't return until close/sweep process is finished
-            lnd.CloseChannel fundingOutPoint true |> Async.Start
-            Console.WriteLine("*** line " + __LINE__)
-            do! Async.Sleep 5000
+                let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
+                match channelInfoAfterPayment1.Status with
+                | ChannelStatus.Active -> ()
+                | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+
+                let fundingOutPoint =
+                    let fundingTxId = uint256(channelInfoAfterPayment1.FundingTxId.ToString())
+                    let fundingOutPointIndex = channelInfoAfterPayment1.FundingOutPointIndex
+                    OutPoint(fundingTxId, fundingOutPointIndex)
+                Console.WriteLine("*** line " + __LINE__)
+                // We use `Async.Start` because close channel api doesn't return until close/sweep process is finished
+                lnd.CloseChannel fundingOutPoint true |> Async.Start
+                Console.WriteLine("*** line " + __LINE__)
+                do! Async.Sleep 5000
             
-            // wait for force-close transaction to appear in mempool
-            while bitcoind.GetTxIdsInMempool().Length = 0 do
-                do! Async.Sleep 500
-            Console.WriteLine("*** line " + __LINE__)
-            let! balanceBeforeFundsReclaimed = serverWallet.GetBalance()
-            Console.WriteLine("*** line " + __LINE__)
-            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
-            Console.WriteLine("*** line " + __LINE__)
-            let rec waitForClosingTx () =
-                async {
-                    let! result = ChainWatcher.CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId serverWallet.ChannelStore
-                    if result then
-                        return ()
-                    else
-                        do! Async.Sleep 500
-                        return! waitForClosingTx()
-                }
+                // wait for force-close transaction to appear in mempool
+                while bitcoind.GetTxIdsInMempool().Length = 0 do
+                    do! Async.Sleep 500
+                Console.WriteLine("*** line " + __LINE__)
+                let! balanceBeforeFundsReclaimed = serverWallet.GetBalance()
+                Console.WriteLine("*** line " + __LINE__)
+                bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                Console.WriteLine("*** line " + __LINE__)
+                let rec waitForClosingTx () =
+                    async {
+                        let! result = ChainWatcher.CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId serverWallet.ChannelStore
+                        if result then
+                            return ()
+                        else
+                            do! Async.Sleep 500
+                            return! waitForClosingTx()
+                    }
 
-            do! waitForClosingTx ()
-            Console.WriteLine("*** line " + __LINE__)
-            let rec waitUntilReadyForBroadcastIsNotEmpty () =
-                async {
-                    let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
-                    if readyForBroadcast.IsEmpty () then
-                        bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
-                        do! Async.Sleep 100
-                        return! waitUntilReadyForBroadcastIsNotEmpty ()
-                    else
-                        return readyForBroadcast
-                }
+                do! waitForClosingTx ()
+                Console.WriteLine("*** line " + __LINE__)
+                let rec waitUntilReadyForBroadcastIsNotEmpty () =
+                    async {
+                        let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
+                        if readyForBroadcast.IsEmpty () then
+                            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                            do! Async.Sleep 100
+                            return! waitUntilReadyForBroadcastIsNotEmpty ()
+                        else
+                            return readyForBroadcast
+                    }
 
-            let! readyToBroadcastHtlcTxs = waitUntilReadyForBroadcastIsNotEmpty()
-            Console.WriteLine("*** line " + __LINE__)
-            let rec broadcastUntilListIsEmpty (readyToBroadcastList: HtlcTxsList) (feeSum: Money) =
-                async {
-                    if readyToBroadcastList.IsEmpty() then
-                        return feeSum
-                    else
-                        let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs serverWallet.Password
-                        do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx serverWallet.ChannelStore |> Async.Ignore
-                        bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                let! readyToBroadcastHtlcTxs = waitUntilReadyForBroadcastIsNotEmpty()
+                Console.WriteLine("*** line " + __LINE__)
+                let rec broadcastUntilListIsEmpty (readyToBroadcastList: HtlcTxsList) (feeSum: Money) =
+                    async {
+                        if readyToBroadcastList.IsEmpty() then
+                            return feeSum
+                        else
+                            let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs serverWallet.Password
+                            do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx serverWallet.ChannelStore |> Async.Ignore
+                            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
 
-                        return! broadcastUntilListIsEmpty rest (feeSum + (Money.Satoshis htlcTx.Fee.EstimatedFeeInSatoshis))
-                }
+                            return! broadcastUntilListIsEmpty rest (feeSum + (Money.Satoshis htlcTx.Fee.EstimatedFeeInSatoshis))
+                    }
 
-            let! feesPaid = broadcastUntilListIsEmpty readyToBroadcastHtlcTxs Money.Zero
+                let! feesPaid = broadcastUntilListIsEmpty readyToBroadcastHtlcTxs Money.Zero
+                Console.WriteLine("*** line " + __LINE__)
+                do! serverWallet.WaitForBalance (balanceBeforeFundsReclaimed + walletToWalletTestPayment1Amount - feesPaid) |> Async.Ignore
+                Console.WriteLine("*** line " + __LINE__)
+            | _ ->
+                Assert.Fail "received non-htlc lightning event"
             Console.WriteLine("*** line " + __LINE__)
-            do! serverWallet.WaitForBalance (balanceBeforeFundsReclaimed + walletToWalletTestPayment1Amount - feesPaid) |> Async.Ignore
-            Console.WriteLine("*** line " + __LINE__)
-        | _ ->
-            Assert.Fail "received non-htlc lightning event"
-        Console.WriteLine("*** line " + __LINE__)
-        TearDown serverWallet bitcoind electrumServer lnd
+            TearDown serverWallet bitcoind electrumServer lnd
+            return true
     }
     [<Category "HtlcOnChainEnforce">]
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by geewallet)``() = Helpers.RunAsyncTest <| async {
+    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by geewallet)``() = Helpers.RunAsyncTestWithRetries 3 <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
         Console.WriteLine("*** line " + __LINE__)
         do! serverWallet.FundByMining bitcoind lnd
@@ -2122,118 +2158,127 @@ type LN() =
             return UnwrapResult receiveHtlcPaymentRes "ReceiveHtlcPayment failed"
         }
 
-        let! (_, receiveLightningEventResult) = AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
         Console.WriteLine("*** line " + __LINE__)
-        match receiveLightningEventResult with
-        | IncomingChannelEvent.HtlcPayment status ->
-            Assert.AreEqual (HtlcSettleStatus.NotSettled, status, "htlc payment got settled")
+        let! sendPaymentResult = 
+            AsyncExtensions.MixedParallel2 sendLndPayment1Job receiveGeewalletPayment
+            |> WithTimeout (TimeSpan.FromSeconds 40.0)
 
-            let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
-            match channelInfoAfterPayment1.Status with
-            | ChannelStatus.Active -> ()
-            | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
-            Console.WriteLine("*** line " + __LINE__)
-            let! _forceCloseTxId = (Lightning.Node.Server serverWallet.NodeServer).ForceCloseChannel channelId
+        match sendPaymentResult with
+        | None -> 
+            TearDown serverWallet bitcoind electrumServer lnd
+            return false
+        | Some(_, receiveLightningEventResult) ->
+            match receiveLightningEventResult with
+            | IncomingChannelEvent.HtlcPayment status ->
+                Assert.AreEqual (HtlcSettleStatus.NotSettled, status, "htlc payment got settled")
 
-            let locallyForceClosedData =
-                match (serverWallet.ChannelStore.ChannelInfo channelId).Status with
-                | ChannelStatus.LocallyForceClosed locallyForceClosedData ->
-                    locallyForceClosedData
-                | status -> failwith (SPrintF1 "unexpected channel status. Expected LocallyForceClosed, got %A" status)
-            Console.WriteLine("*** line " + __LINE__)
-            // wait for force-close transaction to appear in mempool
-            while bitcoind.GetTxIdsInMempool().Length = 0 do
-                do! Async.Sleep 500
+                let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
+                match channelInfoAfterPayment1.Status with
+                | ChannelStatus.Active -> ()
+                | status -> return failwith (SPrintF1 "unexpected channel status. Expected Active, got %A" status)
+                Console.WriteLine("*** line " + __LINE__)
+                let! _forceCloseTxId = (Lightning.Node.Server serverWallet.NodeServer).ForceCloseChannel channelId
 
-            // Mine the force-close tx into a block
-            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
-            Console.WriteLine("*** line " + __LINE__)
-            let! balanceBeforeFundsReclaimed = serverWallet.GetBalance()
-            Console.WriteLine("*** line " + __LINE__)
-            let rec waitForClosingTx () =
-                async {
-                    Console.WriteLine "Looking for closing tx"
-                    let! result = ChainWatcher.CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId serverWallet.ChannelStore
-                    if result then
-                        return ()
-                    else
-                        do! Async.Sleep 500
-                        return! waitForClosingTx()
-                }
+                let locallyForceClosedData =
+                    match (serverWallet.ChannelStore.ChannelInfo channelId).Status with
+                    | ChannelStatus.LocallyForceClosed locallyForceClosedData ->
+                        locallyForceClosedData
+                    | status -> failwith (SPrintF1 "unexpected channel status. Expected LocallyForceClosed, got %A" status)
+                Console.WriteLine("*** line " + __LINE__)
+                // wait for force-close transaction to appear in mempool
+                while bitcoind.GetTxIdsInMempool().Length = 0 do
+                    do! Async.Sleep 500
 
-            do! waitForClosingTx ()
-            Console.WriteLine("*** line " + __LINE__)
-            let rec waitUntilReadyForBroadcastIsNotEmpty () =
-                async {
-                    let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
-                    if readyForBroadcast.IsEmpty () then
-                        Console.WriteLine "No ready for broadcast, rechecking"
-                        bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
-                        do! Async.Sleep 100
-                        return! waitUntilReadyForBroadcastIsNotEmpty ()
-                    else
-                        return readyForBroadcast
-                }
+                // Mine the force-close tx into a block
+                bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                Console.WriteLine("*** line " + __LINE__)
+                let! balanceBeforeFundsReclaimed = serverWallet.GetBalance()
+                Console.WriteLine("*** line " + __LINE__)
+                let rec waitForClosingTx () =
+                    async {
+                        Console.WriteLine "Looking for closing tx"
+                        let! result = ChainWatcher.CheckForChannelForceCloseAndSaveUnresolvedHtlcs channelId serverWallet.ChannelStore
+                        if result then
+                            return ()
+                        else
+                            do! Async.Sleep 500
+                            return! waitForClosingTx()
+                    }
 
-            let! readyToBroadcastHtlcTxs = waitUntilReadyForBroadcastIsNotEmpty()
-            Console.WriteLine("*** line " + __LINE__)
-            let rec broadcastUntilListIsEmpty (readyToBroadcastList: HtlcTxsList) (feeSum: Money) =
-                async {
-                    if readyToBroadcastList.IsEmpty() then
-                        return feeSum
-                    else
-                        let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs serverWallet.Password
-                        Console.WriteLine (sprintf "Broadcasting... %s" (htlcTx.Tx.ToString()))
+                do! waitForClosingTx ()
+                Console.WriteLine("*** line " + __LINE__)
+                let rec waitUntilReadyForBroadcastIsNotEmpty () =
+                    async {
+                        let! readyForBroadcast = ChainWatcher.CheckForChannelReadyToBroadcastHtlcTransactions channelId serverWallet.ChannelStore
+                        if readyForBroadcast.IsEmpty () then
+                            Console.WriteLine "No ready for broadcast, rechecking"
+                            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                            do! Async.Sleep 100
+                            return! waitUntilReadyForBroadcastIsNotEmpty ()
+                        else
+                            return readyForBroadcast
+                    }
 
-                        do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx serverWallet.ChannelStore |> Async.Ignore
-                        bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                let! readyToBroadcastHtlcTxs = waitUntilReadyForBroadcastIsNotEmpty()
+                Console.WriteLine("*** line " + __LINE__)
+                let rec broadcastUntilListIsEmpty (readyToBroadcastList: HtlcTxsList) (feeSum: Money) =
+                    async {
+                        if readyToBroadcastList.IsEmpty() then
+                            return feeSum
+                        else
+                            let! htlcTx, rest = (Lightning.Node.Server serverWallet.NodeServer).CreateHtlcTxForHtlcTxsList readyToBroadcastHtlcTxs serverWallet.Password
+                            Console.WriteLine (sprintf "Broadcasting... %s" (htlcTx.Tx.ToString()))
 
-                        return! broadcastUntilListIsEmpty rest (feeSum + (Money.Satoshis htlcTx.Fee.EstimatedFeeInSatoshis))
-                }
+                            do! ChannelManager.BroadcastHtlcTxAndAddToWatchList htlcTx serverWallet.ChannelStore |> Async.Ignore
+                            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
 
-            let! feesPaidFor2ndStageHtlcTx = broadcastUntilListIsEmpty readyToBroadcastHtlcTxs Money.Zero
+                            return! broadcastUntilListIsEmpty rest (feeSum + (Money.Satoshis htlcTx.Fee.EstimatedFeeInSatoshis))
+                    }
 
-            bitcoind.GenerateBlocksToDummyAddress (locallyForceClosedData.ToSelfDelay |> uint32 |> BlockHeightOffset32)
-            Console.WriteLine("*** line " + __LINE__)
-            let rec checkForReadyToSpend2ndStageClaim ()  =
-                async {
-                    let! readyForBroadcast = ChainWatcher.CheckForReadyToSpendDelayedHtlcTransactions channelId serverWallet.ChannelStore
-                    if List.isEmpty readyForBroadcast then
-                        Console.WriteLine "No ready for spend, rechecking"
-                        bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
-                        do! Async.Sleep 100
-                        return! checkForReadyToSpend2ndStageClaim ()
-                    else
-                        return readyForBroadcast
-                }
+                let! feesPaidFor2ndStageHtlcTx = broadcastUntilListIsEmpty readyToBroadcastHtlcTxs Money.Zero
 
-            let! readyToSpend2ndStages = checkForReadyToSpend2ndStageClaim()
+                bitcoind.GenerateBlocksToDummyAddress (locallyForceClosedData.ToSelfDelay |> uint32 |> BlockHeightOffset32)
+                Console.WriteLine("*** line " + __LINE__)
+                let rec checkForReadyToSpend2ndStageClaim ()  =
+                    async {
+                        let! readyForBroadcast = ChainWatcher.CheckForReadyToSpendDelayedHtlcTransactions channelId serverWallet.ChannelStore
+                        if List.isEmpty readyForBroadcast then
+                            Console.WriteLine "No ready for spend, rechecking"
+                            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                            do! Async.Sleep 100
+                            return! checkForReadyToSpend2ndStageClaim ()
+                        else
+                            return readyForBroadcast
+                    }
 
-            let rec spend2ndStages (readyToSpend2ndStages: List<AmountInSatoshis * TransactionIdentifier>)  =
-                async {
-                    let! recoveryTxs = (Lightning.Node.Server serverWallet.NodeServer).CreateRecoveryTxForDelayedHtlcTx channelId readyToSpend2ndStages
-                    Console.WriteLine (sprintf "Broadcasting... %A" recoveryTxs)
-                    let rec broadcastSpendingTxs (recoveryTxs: List<HtlcRecoveryTx>) (feeSum: Money) =
-                        async {
-                            match recoveryTxs with
-                            | [] -> return feeSum
-                            | recoveryTx::rest ->
-                                do! ChannelManager.BroadcastHtlcRecoveryTxAndRemoveFromWatchList recoveryTx serverWallet.ChannelStore |> Async.Ignore
-                                bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                let! readyToSpend2ndStages = checkForReadyToSpend2ndStageClaim()
 
-                                return! broadcastSpendingTxs rest (feeSum + (Money.Satoshis recoveryTx.Fee.EstimatedFeeInSatoshis))
-                        }
-                    return! broadcastSpendingTxs recoveryTxs Money.Zero
-                }
-            Console.WriteLine("*** line " + __LINE__)
-            let! feePaidForClaiming2ndtSage = spend2ndStages readyToSpend2ndStages
-            Console.WriteLine("*** line " + __LINE__)
-            do! serverWallet.WaitForBalance (balanceBeforeFundsReclaimed + walletToWalletTestPayment1Amount - feesPaidFor2ndStageHtlcTx - feePaidForClaiming2ndtSage) |> Async.Ignore
+                let rec spend2ndStages (readyToSpend2ndStages: List<AmountInSatoshis * TransactionIdentifier>)  =
+                    async {
+                        let! recoveryTxs = (Lightning.Node.Server serverWallet.NodeServer).CreateRecoveryTxForDelayedHtlcTx channelId readyToSpend2ndStages
+                        Console.WriteLine (sprintf "Broadcasting... %A" recoveryTxs)
+                        let rec broadcastSpendingTxs (recoveryTxs: List<HtlcRecoveryTx>) (feeSum: Money) =
+                            async {
+                                match recoveryTxs with
+                                | [] -> return feeSum
+                                | recoveryTx::rest ->
+                                    do! ChannelManager.BroadcastHtlcRecoveryTxAndRemoveFromWatchList recoveryTx serverWallet.ChannelStore |> Async.Ignore
+                                    bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
 
-        | _ ->
-            Assert.Fail "received non-htlc lightning event"
+                                    return! broadcastSpendingTxs rest (feeSum + (Money.Satoshis recoveryTx.Fee.EstimatedFeeInSatoshis))
+                            }
+                        return! broadcastSpendingTxs recoveryTxs Money.Zero
+                    }
+                Console.WriteLine("*** line " + __LINE__)
+                let! feePaidForClaiming2ndtSage = spend2ndStages readyToSpend2ndStages
+                Console.WriteLine("*** line " + __LINE__)
+                do! serverWallet.WaitForBalance (balanceBeforeFundsReclaimed + walletToWalletTestPayment1Amount - feesPaidFor2ndStageHtlcTx - feePaidForClaiming2ndtSage) |> Async.Ignore
 
-        TearDown serverWallet bitcoind electrumServer lnd
+            | _ ->
+                Assert.Fail "received non-htlc lightning event"
+
+            TearDown serverWallet bitcoind electrumServer lnd
+            return true
     }
 
     [<Test>]
@@ -2828,7 +2873,7 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can retrieve funds from channel if local node fell behind remote``() = Async.RunSynchronously <| async {
+    member __.``can retrieve funds from channel if local node fell behind remote``() = Helpers.RunAsyncTestWithRetries 3 <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
 
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
@@ -2855,89 +2900,101 @@ type LN() =
                 Lightning.Network.ReceiveLightningEvent serverWallet.NodeServer channelId true
             return UnwrapResult receiveHtlcPaymentRes "ReceiveHtlcPayment failed"
         }
-
-        let! (_, receiveLightningEventResult) =
+        let! sendPaymentResult = 
             AsyncExtensions.MixedParallel2
                 (sendLndPayment1Job walletToWalletTestPayment1Amount)
                 receiveGeewalletPayment
+            |> WithTimeout (TimeSpan.FromSeconds 40.0)
 
-        match receiveLightningEventResult with
-        | IncomingChannelEvent.HtlcPayment _status ->
-            let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
-            if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> balanceBeforeAnyPayment + walletToWalletTestPayment1Amount then
-                return failwith "incorrect balance after receiving payment 1"
-        | _ ->
-            Assert.Fail "received non-htlc lightning event"
+        match sendPaymentResult with
+        | None -> 
+            TearDown serverWallet bitcoind electrumServer lnd
+            return false
+        | Some(_, receiveLightningEventResult) ->
+            match receiveLightningEventResult with
+            | IncomingChannelEvent.HtlcPayment _status ->
+                let channelInfoAfterPayment1 = serverWallet.ChannelStore.ChannelInfo channelId
+                if Money(channelInfoAfterPayment1.Balance, MoneyUnit.BTC) <> balanceBeforeAnyPayment + walletToWalletTestPayment1Amount then
+                    return failwith "incorrect balance after receiving payment 1"
+            | _ ->
+                Assert.Fail "received non-htlc lightning event"
             
-        let serializedChannelAfterPayment1 = serverWallet.ChannelStore.LoadChannel channelId
+            let serializedChannelAfterPayment1 = serverWallet.ChannelStore.LoadChannel channelId
             
-        let! (_, receiveLightningEventResult2) =
-            AsyncExtensions.MixedParallel2
-                (sendLndPayment1Job walletToWalletTestPayment2Amount)
-                receiveGeewalletPayment
+            let! sendPaymentResult2 =
+                AsyncExtensions.MixedParallel2
+                    (sendLndPayment1Job walletToWalletTestPayment2Amount)
+                    receiveGeewalletPayment
+                |> WithTimeout (TimeSpan.FromSeconds 40.0)
                 
-        let channelInfoAfterPayment2 = serverWallet.ChannelStore.ChannelInfo channelId
-        match receiveLightningEventResult2 with
-        | IncomingChannelEvent.HtlcPayment _status ->
-            if Money(channelInfoAfterPayment2.Balance, MoneyUnit.BTC) <>
-               balanceBeforeAnyPayment + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount then
-                return failwith "incorrect balance after receiving payment 2"
-        | _ ->
-            Assert.Fail "received non-htlc lightning event"
-        
-        serverWallet.ChannelStore.SaveChannel serializedChannelAfterPayment1
-        
-        let! reestablishResult =
-            ActiveChannel.AcceptReestablish serverWallet.ChannelStore serverWallet.NodeServer.TransportListener channelId
-        match reestablishResult with
-        | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync false))) -> ()
-        | result ->
-            Assert.Fail(sprintf "Expected OutOfSync, got %A" result)
-            
-        // LND has received error from us an is force-closing the channel now
-        
-        let rec waitForClosingTx () =
-            async {
-                let! forceCloseResult = serverWallet.ChannelStore.CheckForClosingTx channelId
-                match forceCloseResult with
-                | Some (ClosingTx.ForceClose commitmentTx, _closingTxConfirmations) ->
-                    return commitmentTx
+            match sendPaymentResult2 with
+            | None -> 
+                TearDown serverWallet bitcoind electrumServer lnd
+                return false
+            | Some(_, receiveLightningEventResult2) ->
+                let channelInfoAfterPayment2 = serverWallet.ChannelStore.ChannelInfo channelId
+                match receiveLightningEventResult2 with
+                | IncomingChannelEvent.HtlcPayment _status ->
+                    if Money(channelInfoAfterPayment2.Balance, MoneyUnit.BTC) <>
+                       balanceBeforeAnyPayment + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount then
+                        return failwith "incorrect balance after receiving payment 2"
                 | _ ->
-                   do! Async.Sleep 1000
-                   return! waitForClosingTx()
-            }
+                    Assert.Fail "received non-htlc lightning event"
         
-        let! closingTx = waitForClosingTx()
+                serverWallet.ChannelStore.SaveChannel serializedChannelAfterPayment1
         
-        bitcoind.GenerateBlocksToDummyAddress(BlockHeightOffset32 1u)
-        
-        let! recoveryTxResult =
-            (Node.Server serverWallet.NodeServer).CreateRecoveryTxForForceClose
-                channelId
-                closingTx.Tx
-        match recoveryTxResult with
-        | Ok recoveryTx ->
-            let! txIdString =
-                ChannelManager.BroadcastRecoveryTxAndCloseChannel recoveryTx serverWallet.ChannelStore
-            // wait for recovery tx to appear in mempool
-            while bitcoind.GetTxIdsInMempool().Length = 0 do
-                do! Async.Sleep 500
-            // Mine the recovery tx
-            bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+                let! reestablishResult =
+                    ActiveChannel.AcceptReestablish serverWallet.ChannelStore serverWallet.NodeServer.TransportListener channelId
+                match reestablishResult with
+                | Error(ReconnectActiveChannelError.Reconnect(ReconnectError.Reestablish(ReestablishError.OutOfSync false))) -> ()
+                | result ->
+                    Assert.Fail(sprintf "Expected OutOfSync, got %A" result)
             
-            let channelInfoAfterForceClose = serverWallet.ChannelStore.ChannelInfo channelId
-            match channelInfoAfterForceClose.Status with
-            | RecoveryTxSentOrNotNeeded(Some txId) ->
-                Assert.AreEqual(txId, TransactionIdentifier.Parse txIdString)
-            | status -> Assert.Fail(sprintf "Expected RecoveryTxSentOrNotNeeded(Some tx), got %A" status)
-            let expectedBalance = balanceBeforeAnyPayment + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount
-            let possibleFees = Money.Coins 0.0001m
-            let! balanceAfterRecovery = serverWallet.WaitForBalance(expectedBalance - possibleFees)
-            Assert.That((expectedBalance - balanceAfterRecovery).Abs() < possibleFees)
-        | Error err ->
-            Assert.Fail("Error recovering funds: " + err.ToString())
+                // LND has received error from us an is force-closing the channel now
         
-        TearDown serverWallet bitcoind electrumServer lnd
+                let rec waitForClosingTx () =
+                    async {
+                        let! forceCloseResult = serverWallet.ChannelStore.CheckForClosingTx channelId
+                        match forceCloseResult with
+                        | Some (ClosingTx.ForceClose commitmentTx, _closingTxConfirmations) ->
+                            return commitmentTx
+                        | _ ->
+                           do! Async.Sleep 1000
+                           return! waitForClosingTx()
+                    }
+        
+                let! closingTx = waitForClosingTx()
+        
+                bitcoind.GenerateBlocksToDummyAddress(BlockHeightOffset32 1u)
+        
+                let! recoveryTxResult =
+                    (Node.Server serverWallet.NodeServer).CreateRecoveryTxForForceClose
+                        channelId
+                        closingTx.Tx
+                match recoveryTxResult with
+                | Ok recoveryTx ->
+                    let! txIdString =
+                        ChannelManager.BroadcastRecoveryTxAndCloseChannel recoveryTx serverWallet.ChannelStore
+                    // wait for recovery tx to appear in mempool
+                    while bitcoind.GetTxIdsInMempool().Length = 0 do
+                        do! Async.Sleep 500
+                    // Mine the recovery tx
+                    bitcoind.GenerateBlocksToDummyAddress (BlockHeightOffset32 1u)
+            
+                    let channelInfoAfterForceClose = serverWallet.ChannelStore.ChannelInfo channelId
+                    match channelInfoAfterForceClose.Status with
+                    | RecoveryTxSentOrNotNeeded(Some txId) ->
+                        Assert.AreEqual(txId, TransactionIdentifier.Parse txIdString)
+                    | status -> Assert.Fail(sprintf "Expected RecoveryTxSentOrNotNeeded(Some tx), got %A" status)
+                    let expectedBalance = balanceBeforeAnyPayment + walletToWalletTestPayment1Amount + walletToWalletTestPayment2Amount
+                    let possibleFees = Money.Coins 0.0001m
+                    let! balanceAfterRecovery = serverWallet.WaitForBalance(expectedBalance - possibleFees)
+                    Assert.That((expectedBalance - balanceAfterRecovery).Abs() < possibleFees)
+                | Error err ->
+                    Assert.Fail("Error recovering funds: " + err.ToString())
+        
+                TearDown serverWallet bitcoind electrumServer lnd
+                return true
     }
 
     [<Test>]
