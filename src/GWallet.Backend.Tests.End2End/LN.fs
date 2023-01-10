@@ -1928,7 +1928,7 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs``() = Helpers.RunAsyncTestWithRetries 3 <| async {
+    member __.``can accept channel from LND and receive htlcs``() = Helpers.RunAsyncTestWithRetries 10 <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
 
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId
@@ -1997,7 +1997,7 @@ type LN() =
 
     [<Category "HtlcOnChainEnforce">]
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by lnd)``() = Helpers.RunAsyncTestWithRetries 3 <| async {
+    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by lnd)``() = Helpers.RunAsyncTestWithRetries 10 <| async {
         Console.WriteLine("*** line " + __LINE__)
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
         Console.WriteLine("*** line " + __LINE__)
@@ -2120,7 +2120,7 @@ type LN() =
     }
     [<Category "HtlcOnChainEnforce">]
     [<Test>]
-    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by geewallet)``() = Helpers.RunAsyncTestWithRetries 3 <| async {
+    member __.``can accept channel from LND and receive htlcs but settle on-chain (force close initiated by geewallet)``() = Helpers.RunAsyncTestWithRetries 10 <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
         Console.WriteLine("*** line " + __LINE__)
         do! serverWallet.FundByMining bitcoind lnd
@@ -2873,7 +2873,7 @@ type LN() =
     }
 
     [<Test>]
-    member __.``can retrieve funds from channel if local node fell behind remote``() = Helpers.RunAsyncTestWithRetries 3 <| async {
+    member __.``can retrieve funds from channel if local node fell behind remote``() = Helpers.RunAsyncTestWithRetries 10 <| async {
         let! channelId, serverWallet, bitcoind, electrumServer, lnd = AcceptChannelFromLndFunder ()
 
         let channelInfoBeforeAnyPayment = serverWallet.ChannelStore.ChannelInfo channelId

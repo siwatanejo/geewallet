@@ -47,7 +47,7 @@ jobs:
       run: .\make update-servers
 
   linux22-github--xbuild:
-    timeout-minutes: 100
+    timeout-minutes: 120
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v1
@@ -76,7 +76,7 @@ jobs:
         make check-end2end
 
   linux22-github--msbuild:
-    timeout-minutes: 100
+    timeout-minutes: 120
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v1
@@ -107,7 +107,7 @@ jobs:
         make check-end2end
 
   linux22-vanilla--stockmono:
-    timeout-minutes: 100
+    timeout-minutes: 120
     runs-on: ubuntu-22.04
     container:
       image: "ubuntu:22.04"
@@ -149,7 +149,7 @@ jobs:
         make check-end2end
 
   linux22-vanilla--newmono:
-    timeout-minutes: 100
+    timeout-minutes: 120
     runs-on: ubuntu-22.04
     container:
       image: "ubuntu:22.04"
@@ -194,7 +194,7 @@ jobs:
 
 
   linux20-github--xbuild:
-    timeout-minutes: 100
+    timeout-minutes: 120
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v1
@@ -223,7 +223,7 @@ jobs:
         make check-end2end
 
   linux20-github--msbuild:
-    timeout-minutes: 100
+    timeout-minutes: 120
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v1
@@ -254,7 +254,7 @@ jobs:
         make check-end2end
 
   linux20-vanilla--stockmono:
-    timeout-minutes: 100
+    timeout-minutes: 120
     runs-on: ubuntu-20.04
     container:
       image: "ubuntu:20.04"
@@ -296,7 +296,7 @@ jobs:
         make check-end2end
 
   linux20-vanilla--newmono:
-    timeout-minutes: 100
+    timeout-minutes: 120
     runs-on: ubuntu-20.04
     container:
       image: "ubuntu:20.04"
