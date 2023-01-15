@@ -36,6 +36,14 @@ let GTK_FRONTEND = "GWallet.Frontend.XF.Gtk"
 let DEFAULT_SOLUTION_FILE = "gwallet.core.sln"
 let LINUX_SOLUTION_FILE = "gwallet.linux-legacy.sln"
 let MAC_SOLUTION_FILE = "gwallet.mac-legacy.sln"
+let MAUI_PROJECT_FILE = 
+    Path.Combine(
+        [| 
+            "src"
+            "GWallet.Frontend.Maui"
+            "GWallet.Frontend.Maui.fsproj"
+        |]
+    )
 let BACKEND = "GWallet.Backend"
 
 type Frontend =
@@ -175,6 +183,11 @@ let BuildSolution
             Seq.append ["LEGACY_FRAMEWORK"] defineConstantsFromBuildConfig
         else
             defineConstantsFromBuildConfig
+    let defineConstantsSoFar =
+        if not(solutionFileName.EndsWith "maui.sln") then
+            Seq.append ["XAMARIN"] defineConstantsSoFar
+        else
+            defineConstantsSoFar
     let allDefineConstants =
         match maybeConstant with
         | Some constant -> Seq.append [constant] defineConstantsSoFar
@@ -221,6 +234,47 @@ let BuildSolution
 #endif
         Environment.Exit 1
     | _ -> ()
+
+let CopyXamlFiles() = 
+    let files = [| "WelcomePage.xaml"; "WelcomePage.xaml.fs" |]
+    for file in files do
+        let sourcePath = Path.Combine([| "src"; "GWallet.Frontend.XF"; file |])
+        let destPath = Path.Combine([| "src"; "GWallet.Frontend.Maui"; file |])
+            
+        File.Copy(sourcePath, destPath, true)
+        let extenstion = file.Split([| "." |], StringSplitOptions.RemoveEmptyEntries) |> Array.last
+        let mutable fileText = File.ReadAllText(destPath)
+        if extenstion = "xaml" then
+            fileText <- fileText.Replace("http://xamarin.com/schemas/2014/forms","http://schemas.microsoft.com/dotnet/2021/maui")
+        fileText <- fileText.Replace("GWallet.Frontend.XF", "GWallet.Frontend.Maui")
+        File.WriteAllText(destPath, fileText)
+
+let DotNetBuild
+    (solutionProjectFileName: string)
+    (binaryConfig: BinaryConfig)
+    (args: string)
+    (ignoreError: bool)
+    =
+    let configOption = sprintf "-c %s" (binaryConfig.ToString())
+    let buildArgs = (sprintf "build %s %s %s" configOption solutionProjectFileName args)
+    let buildProcess = Process.Execute ({ Command = "dotnet"; Arguments = buildArgs }, Echo.All)
+    match buildProcess.Result with
+    | Error _ ->
+        if not ignoreError then
+            Console.WriteLine()
+            Console.Error.WriteLine "dotnet build failed"
+#if LEGACY_FRAMEWORK
+            PrintNugetVersion() |> ignore
+#endif
+            Environment.Exit 1
+        else
+            ()
+    | _ -> ()
+
+
+let BuildMauiProject binaryConfig =
+    DotNetBuild MAUI_PROJECT_FILE binaryConfig "--framework net6.0-android" true
+    DotNetBuild MAUI_PROJECT_FILE binaryConfig "--framework net6.0-android" false
 
 let JustBuild binaryConfig maybeConstant: Frontend*FileInfo =
     let maybeBuildTool = Map.tryFind "BuildTool" buildConfigContents
@@ -318,7 +372,14 @@ let JustBuild binaryConfig maybeConstant: Frontend*FileInfo =
                     Frontend.Console
 
             | _ -> Frontend.Console
-
+        elif buildTool = "dotnet" then
+            match Misc.GuessPlatform () with
+            | Misc.Platform.Mac ->
+                if binaryConfig = BinaryConfig.Debug then
+                    CopyXamlFiles()
+                    BuildMauiProject binaryConfig
+                Frontend.Console
+            | _ -> Frontend.Console
         else
             Frontend.Console
 
