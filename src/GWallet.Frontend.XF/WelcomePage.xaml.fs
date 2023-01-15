@@ -1,16 +1,32 @@
-﻿namespace GWallet.Frontend.XF
+﻿#if !XAMARIN
+namespace GWallet.Frontend.Maui
+#else
+namespace GWallet.Frontend.XF
+#endif
 
 open System
 open System.Linq
-
+#if !XAMARIN
+open Microsoft.Maui.Controls
+open Microsoft.Maui.Controls.Xaml
+open Microsoft.Maui.Networking
+open Microsoft.Maui.ApplicationModel
+#else
 open Xamarin.Forms
 open Xamarin.Forms.Xaml
 open Xamarin.Essentials
+#endif
+
 
 open GWallet.Backend
 open GWallet.Backend.FSharpUtil.UwpHacks
-
+// state is unused in Maui for now because it's only used to pass it to
+// WelcomePage2() ctor, which is not created in Maui app yet
+#if !XAMARIN
+type WelcomePage(_state: FrontendHelpers.IGlobalAppState) =
+#else
 type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
+#endif
     inherit ContentPage()
 
     let _ = base.LoadFromXaml(typeof<WelcomePage>)
@@ -122,6 +138,7 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
                     let! mainThreadSynchContext =
                         Async.AwaitTask <| MainThread.GetMainThreadSynchronizationContextAsync()
                     do! Async.SwitchToContext mainThreadSynchContext
+#if XAMARIN
                     let dateTime = dobDatePicker.Date
                     ToggleInputWidgetsEnabledOrDisabled false
                     do! Async.SwitchToThreadPool()
@@ -133,6 +150,7 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
                         WelcomePage2 (state, masterPrivKeyTask)
                             :> Page
                     do! FrontendHelpers.SwitchToNewPageDiscardingCurrentOneAsync this welcomePage
+#endif
                 }
 
         if dobDatePicker.Date.Date = middleDateEighteenYearsAgo.Date then
