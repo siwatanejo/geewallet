@@ -129,6 +129,43 @@ jobs:
     - uses: actions/checkout@v1
       with:
         submodules: false
+    - name: Checkout MAUI repo
+      uses: actions/checkout@v3
+      with:
+        repository: aarani/maui
+        path: maui
+    - name: Checkout GTKSharp repo
+      uses: actions/checkout@v3
+      with:
+        repository: aarani/GtkSharp
+        path: GtkSharp
+    # We also tested using 6.0.111 for both projects
+    # but MAUI failed to build on this version with this error:
+    # Could not load file or assembly 'Microsoft.CodeAnalysis, Version=4.2.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'
+    # so instead we added support for 6.0.4xx to GtkSharp
+    - name: Setup .NET SDK 6.0.401
+      uses: actions/setup-dotnet@v1.7.2
+      with:
+        dotnet-version: '6.0.401'
+    - name: Build GtkSharp
+      run: |
+        cd GtkSharp
+        dotnet tool restore
+        # Disable GTKSharp's cake versioning behaviour with github ci
+        # beceause it breaks InstallWorkload step.
+        export GITHUB_ACTIONS=
+        dotnet cake build.cake --BuildVersion=3.24.24.64
+        dotnet cake --BuildTarget=InstallWorkload --BuildVersion=3.24.24.64
+        cd ..
+    - name: Build MAUI
+      run: |
+        cd maui
+        dotnet nuget add source '../GtkSharp/BuildOutput/NugetPackages'
+        dotnet build Microsoft.Maui.BuildTasks.slnf
+        cd ..
+    - name: Build GWallet
+      run: |
+        dotnet build src/GWallet.Frontend.Maui/GWallet.Frontend.Maui.fsproj
     - name: install missing dependencies
       run: sudo apt install --yes fsharp nunit-console
     - name: check mono version
