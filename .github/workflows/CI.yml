@@ -125,10 +125,39 @@ jobs:
 
   linux22-github:
     runs-on: ubuntu-22.04
+    env:
+      GtkSharpVersion: 3.24.24.64
     steps:
     - uses: actions/checkout@v1
       with:
-        submodules: false
+        submodules: true
+    # We also tested using 6.0.111 for both projects
+    # but MAUI failed to build on this version with this error:
+    # Could not load file or assembly 'Microsoft.CodeAnalysis, Version=4.2.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'
+    # so instead we added support for 6.0.4xx to GtkSharp
+    - name: Setup .NET SDK 6.0.401
+      uses: actions/setup-dotnet@v1.7.2
+      with:
+        dotnet-version: '6.0.401'
+    # We need to build GtkSharp ourselves because the last shipped nuget package until now does not contain the latest changes comprising
+    # works which is needed for building the GtkSharp net6 workload (https://github.com/GtkSharp/GtkSharp/commit/60376ae510c04aa4508365993643d5cec1d2b9f1).
+    # Last shipped nuget package is version 3.24.24.24 (https://github.com/GtkSharp/GtkSharp/releases/tag/3.24.24.34) on April 2nd 2021.
+    - name: Build GtkSharp
+      run: |
+        cd dependencies/GtkSharp
+        dotnet tool restore
+        # Disable GTKSharp's cake versioning behaviour with github ci
+        # beceause it breaks InstallWorkload step.
+        export GITHUB_ACTIONS=
+        dotnet cake build.cake --BuildVersion=$GtkSharpVersion
+        dotnet cake --BuildTarget=InstallWorkload --BuildVersion=$GtkSharpVersion
+        cd ../..
+    - name: Add Maui Nuget source
+      run: |
+        cd dependencies/maui
+        dotnet nuget add source $(realpath '../GtkSharp/BuildOutput/NugetPackages')
+        cd ../../src/GWallet.Frontend.Maui/
+        dotnet nuget add source $(realpath '../../dependencies/GtkSharp/BuildOutput/NugetPackages')
     - name: install missing dependencies
       run: sudo apt install --yes fsharp nunit-console
     - name: check mono version
@@ -137,6 +166,10 @@ jobs:
       run: ./configure.sh
     - name: build in DEBUG mode
       run: make
+    - name: build Maui frontend
+      run: |
+        cd src/GWallet.Frontend.Maui/
+        dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk
     - name: sanity check
       run: make sanitycheck
     - name: unit tests
