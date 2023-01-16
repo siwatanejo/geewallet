@@ -125,10 +125,39 @@ jobs:
 
   linux22-github:
     runs-on: ubuntu-22.04
+    env:
+      GtkSharpVersion: 3.24.24.64
     steps:
     - uses: actions/checkout@v1
       with:
-        submodules: false
+        submodules: true
+    # We also tested using 6.0.111 for both projects
+    # but MAUI failed to build on this version with this error:
+    # Could not load file or assembly 'Microsoft.CodeAnalysis, Version=4.2.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'
+    # so instead we added support for 6.0.3xx to GtkSharp
+    - name: Setup .NET SDK 6.0.300
+      uses: actions/setup-dotnet@v1.7.2
+      with:
+        dotnet-version: '6.0.300'
+    - name: Install gtk workload
+      run: |
+        dotnet nuget add source --username ${{ secrets.USERNAME }} --password ${{ secrets.PERSONAL_ACCESS_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/GtkSharp/index.json"
+        # For some reason automatic workload manifest detection doesn't work, so download and uzip mainfest file manually
+        wget --user ${{ secrets.USERNAME }} --password ${{ secrets.PERSONAL_ACCESS_TOKEN }} https://nuget.pkg.github.com/GtkSharp/download/gtksharp.net.sdk.gtk.manifest-6.0.300/3.24.24.77-develop/gtksharp.net.sdk.gtk.manifest-6.0.300.nupkg
+        DOTNET_DIR=/home/runner/.dotnet
+        WORKLOAD_MANIFEST_DIR=$DOTNET_DIR/sdk-manifests/6.0.300/gtksharp.net.sdk.gtk
+        unzip -j gtksharp.net.sdk.gtk.manifest-6.0.300.nupkg "data/*" -d $WORKLOAD_MANIFEST_DIR/
+        rm gtksharp.net.sdk.gtk.manifest-6.0.300.nupkg
+        chmod 764 $WORKLOAD_MANIFEST_DIR/*
+        dotnet workload search
+        dotnet workload install gtk
+    - name: Add Maui Nuget source
+      run: |
+        cd dependencies/maui
+        dotnet nuget add source --username ${{ secrets.USERNAME }} --password ${{ secrets.PERSONAL_ACCESS_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/GtkSharp/index.json"
+        #cd ../..
+        #cd src/GWallet.Frontend.Maui/
+        #dotnet nuget add source --username ${{ secrets.USERNAME }} --password ${{ secrets.PERSONAL_ACCESS_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/GtkSharp/index.json"        
     - name: install missing dependencies
       run: sudo apt install --yes fsharp nunit-console
     - name: check mono version
@@ -137,6 +166,10 @@ jobs:
       run: ./configure.sh
     - name: build in DEBUG mode
       run: make
+    - name: build Maui frontend
+      run: |
+        cd src/GWallet.Frontend.Maui/
+        dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk
     - name: sanity check
       run: make sanitycheck
     - name: unit tests
