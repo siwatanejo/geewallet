@@ -229,6 +229,8 @@ let BuildSolution
         Environment.Exit 1
     | _ -> ()
 
+// TODO: we have to change this function to be the other way around (i.e. copy from Maui to XF) once we
+//       have a finished version of Maui and we consider XF as legacy.
 let CopyXamlFiles() = 
     let files = [| "WelcomePage.xaml" |]
     for file in files do
@@ -436,6 +438,7 @@ let GetPathToBackend () =
 let MakeAll (maybeConstant: Option<string>) =
     let buildConfig = BinaryConfig.Debug
     let frontend,_ = JustBuild buildConfig maybeConstant
+    CopyXamlFiles()
     frontend,buildConfig
 
 let RunFrontend (frontend: Frontend) (buildConfig: BinaryConfig) (maybeArgs: Option<string>) =
