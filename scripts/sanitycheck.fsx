@@ -301,11 +301,13 @@ let SanityCheckNugetPackages () =
                     FsxHelper.NugetSolutionPackagesDir.Name
                     FsxHelper.NugetSolutionPackagesDir.FullName
             let packageDirsThatShouldExist = MapHelper.GetKeysOfMap idealPackageDirs
+            let lowercaseDirNameRegex = Regex("^[a-z\\.]+$")
             seq {
                 for packageDirThatExists in packageDirNames do
                     if not (packageDirsThatShouldExist.Contains packageDirThatExists) then
                         yield packageDirThatExists
             }
+            |> Seq.filter (fun dirName -> not (lowercaseDirNameRegex.Match dirName).Success)
 
         let findPackagesWithMoreThanOneVersion
             (packageTree: Map<ComparableFileInfo,seq<PackageInfo>>)
