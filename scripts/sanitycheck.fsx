@@ -353,7 +353,23 @@ let SanityCheckNugetPackages () =
         let packages = getAllPackageIdsAndVersions packageTree
         Console.WriteLine(sprintf "%d nuget packages found for solution %s" packages.Count sol.Name)
         let idealDirList = getDirectoryNamesForPackagesSet packages
-        
+
+        Console.WriteLine()
+        Console.WriteLine "Packages for solution:"
+        for each in packages do
+            Console.WriteLine(sprintf "%A %A" each.Key.PackageId each.Key.PackageVersion)
+
+        Console.WriteLine()
+        Console.WriteLine "Directories that should exist:"
+        for each in idealDirList do
+            Console.WriteLine each.Key
+
+        Console.WriteLine()
+        Console.WriteLine "Directories that exist:"
+        for each in FsxHelper.NugetSolutionPackagesDir.EnumerateDirectories().Select(fun dir -> dir.Name).Except(["src"]) do
+            Console.WriteLine each
+        Console.WriteLine()
+
         let solDir = sol.Directory
         solDir.Refresh ()
         let missingPackageDirs = findMissingPackageDirs solDir idealDirList
