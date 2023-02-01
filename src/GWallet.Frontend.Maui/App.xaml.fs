@@ -7,4 +7,4 @@ type App() as this =
     inherit Application()
 
     do this.LoadFromXaml(typeof<App>) |> ignore
-    do this.MainPage <- AppShell()
+    do this.MainPage <- WelcomePage()
