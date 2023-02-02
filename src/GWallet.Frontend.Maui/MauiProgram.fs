@@ -12,21 +12,30 @@ open Microsoft.Maui.Controls.Compatibility.Hosting
 open Microsoft.Maui.Controls.Hosting
 open Microsoft.Maui.Hosting
 open Microsoft.Maui.LifecycleEvents
+open Microsoft.Maui.Controls.Internals
 
 type MauiProgram =
     static member CreateMauiApp() =
-        MauiApp
-            .CreateBuilder()
-            .UseMauiApp<App>()
+        let appBuilder = 
+            MauiApp
+                .CreateBuilder()
+                .UseMauiApp<App>()
 #if GTK 
-            .UseMauiCompatibility()
+                .UseMauiCompatibility()
+        let services = appBuilder.Services
+
+        services.AddSingleton<IFontNamedSizeService, Microsoft.Maui.Controls.Compatibility.Platform.Gtk.FontNamedSizeService>() |> ignore
+        services.AddTransient<Page, WelcomePage>() |> ignore
 #endif
+        appBuilder
             .ConfigureFonts(fun fonts ->
                 fonts
                     .AddFont("OpenSans-Regular.ttf", "OpenSansRegular")
                     .AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold")
                 |> ignore
-            )
-            .Build()
+            ) |> ignore
+
+        appBuilder.Build()
+
 
         
