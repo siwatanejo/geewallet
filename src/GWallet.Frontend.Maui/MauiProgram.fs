@@ -1,10 +1,11 @@
 ﻿namespace GWallet.Frontend.Maui
 
-
+#if GTK
 open Gdk
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.DependencyInjection.Extensions
+#endif
 open Microsoft.Maui
 open Microsoft.Maui.Controls
 open Microsoft.Maui.Controls.Compatibility

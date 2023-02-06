@@ -128,12 +128,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
       with:
-        submodules: false
-    - name: Checkout MAUI repo
-      uses: actions/checkout@v3
-      with:
-        repository: aarani/maui
-        path: maui
+        submodules: true
     - name: Checkout GTKSharp repo
       uses: actions/checkout@v3
       with:
@@ -147,6 +142,11 @@ jobs:
       uses: actions/setup-dotnet@v1.7.2
       with:
         dotnet-version: '6.0.401'
+    - name: ls
+      run: |
+        ls -la
+        ls -la dependencies/maui
+        ls -la ..
     - name: Build GtkSharp
       run: |
         cd GtkSharp
@@ -157,15 +157,18 @@ jobs:
         dotnet cake build.cake --BuildVersion=3.24.24.64
         dotnet cake --BuildTarget=InstallWorkload --BuildVersion=3.24.24.64
         cd ..
-    - name: Build MAUI
+    - name: Add Maui Nuget source
       run: |
-        cd maui
-        dotnet nuget add source '../GtkSharp/BuildOutput/NugetPackages'
-        dotnet build Microsoft.Maui.BuildTasks.slnf
-        cd ..
+        cd dependencies/maui
+        ls -la ../../GtkSharp/BuildOutput/NugetPackages
+        dotnet nuget add source '../../GtkSharp/BuildOutput/NugetPackages'
+        cd ../..
+    - name: Cat for test
+      run: cat dependencies/maui/NuGet.config
     - name: Build GWallet
       run: |
-        dotnet build src/GWallet.Frontend.Maui/GWallet.Frontend.Maui.fsproj
+        cd src/GWallet.Frontend.Maui/
+        dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk
     - name: install missing dependencies
       run: sudo apt install --yes fsharp nunit-console
     - name: check mono version
