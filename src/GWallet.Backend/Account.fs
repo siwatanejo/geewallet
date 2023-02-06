@@ -300,20 +300,12 @@ module Account =
         match accountOpt with
         | Some account -> async { return checkValidPasswordForSingleAccount account }
         | _ ->
-            let checkJobs =
-                seq {
-                    for account in GetAllActiveAccounts().OfType<NormalAccount>() do
-                        yield async {
-                            return checkValidPasswordForSingleAccount account
-                        }
-                }
-            async {
-                let! aggregateSuccess = Async.Parallel checkJobs
-                if aggregateSuccess.All(fun success -> success = true) then
-                    return true
-                else
-                    return false
-            }
+            // Because password check is expensive operation, only check it for one account.
+            // Ethereum accounts take about 2 times longer to check, so use BTC.
+            let btcAccount = 
+                GetAllActiveAccounts().OfType<NormalAccount>() 
+                |> Seq.find (fun acc -> (acc :> IAccount).Currency = Currency.BTC)
+            async { return checkValidPasswordForSingleAccount btcAccount }
 
     let private CreateArchivedAccount (currency: Currency) (unencryptedPrivateKey: string): ArchivedAccount =
         let fromUnencryptedPrivateKeyToPublicAddressFunc =
