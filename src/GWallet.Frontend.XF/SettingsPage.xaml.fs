@@ -41,13 +41,17 @@ type SettingsPage(option: string) as this =
         
     member private self.PerformCheck(checkJob: Async<bool>) =
         async {
-            loadingIndicator.IsVisible <- true
-            resultMessage.IsVisible <- false
+            Device.BeginInvokeOnMainThread(
+                fun () ->
+                    loadingIndicator.IsVisible <- true
+                    resultMessage.IsVisible <- false)
             let! checkResult = checkJob
-            loadingIndicator.IsVisible <- false
-            resultMessage.IsVisible <- true
-            resultMessage.Text <- if checkResult then "Success!" else "Try again"
-        } |> Async.StartImmediate
+            Device.BeginInvokeOnMainThread(
+                fun () ->
+                    loadingIndicator.IsVisible <- false
+                    resultMessage.IsVisible <- true
+                    resultMessage.Text <- if checkResult then "Success!" else "Try again" )
+        } |> FrontendHelpers.DoubleCheckCompletionAsync true
 
     member self.OnWipeWalletButtonClicked (_sender: Object, _args: EventArgs) =
         async {
