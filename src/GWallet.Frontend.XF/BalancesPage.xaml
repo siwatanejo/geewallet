@@ -19,7 +19,7 @@
                        x:Name="logoInSidemenu"/>
 
                 <StackLayout Spacing="15" Orientation="Horizontal">
-                    <Label VerticalOptions="Center" FontFamily="Icons" Text="#"/>
+                    <Label VerticalOptions="Center" Text="#"/>
                     <Label Text="Check you still remember your payment password"/>
                     <StackLayout.GestureRecognizers>
                         <TapGestureRecognizer CommandParameter="Check you still remember your payment password" Tapped="OpenSettings_Tapped"/>
@@ -27,7 +27,7 @@
                 </StackLayout>
 
                 <StackLayout Spacing="15" Orientation="Horizontal">
-                    <Label VerticalOptions="Center" FontFamily="Icons" Text="#"/>
+                    <Label VerticalOptions="Center" Text="#"/>
                     <Label Text="Check you still remember your secret recovery phrase"/>
                     <StackLayout.GestureRecognizers>
                         <TapGestureRecognizer CommandParameter="Check you still remember your secret recovery phrase" Tapped="OpenSettings_Tapped"/>
@@ -35,7 +35,7 @@
                 </StackLayout>
 
                 <StackLayout Spacing="15" Orientation="Horizontal">
-                    <Label VerticalOptions="Center" FontFamily="Icons" Text="#"/>
+                    <Label VerticalOptions="Center" Text="#"/>
                     <Label Text="Wipe your current wallet, in order to start from scratch"/>
                     <StackLayout.GestureRecognizers>
                         <TapGestureRecognizer CommandParameter="Wipe your current wallet, in order to start from scratch" Tapped="OpenSettings_Tapped"/>
@@ -54,10 +54,9 @@
                      VerticalOptions="FillAndExpand">
 
             <!-- Settings icon-->
-            <ImageButton TextColor="#111"
+            <ImageButton
                     x:Name="settingsIcon"
                     BackgroundColor="Transparent"
-                    FontFamily="Icons"
                     Padding="0"
                     HeightRequest="30"
                     WidthRequest="30"
