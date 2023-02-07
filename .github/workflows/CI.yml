@@ -168,7 +168,7 @@ jobs:
     - name: Build GWallet
       run: |
         cd src/GWallet.Frontend.Maui/
-        dotnet nuget add source '../../dependencies/GtkSharp/BuildOutput/NugetPackages'
+        dotnet nuget add source 'dependencies/GtkSharp/BuildOutput/NugetPackages'
         dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk
     - name: install missing dependencies
       run: sudo apt install --yes fsharp nunit-console
