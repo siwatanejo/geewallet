@@ -164,7 +164,7 @@ jobs:
       run: |
         cd geewallet/dependencies/maui
         ls -la ../../../GtkSharp/BuildOutput/NugetPackages
-        dotnet nuget add source '../../../GtkSharp/BuildOutput/NugetPackages'
+        dotnet nuget add source '../GtkSharp/BuildOutput/NugetPackages'
         cd ../../..
     - name: Cat for test
       run: cat geewallet/dependencies/maui/NuGet.config
