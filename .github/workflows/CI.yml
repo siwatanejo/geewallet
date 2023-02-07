@@ -126,14 +126,15 @@ jobs:
   linux22-github:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
+        path: geewallet
         submodules: true
     - name: Checkout GTKSharp repo
       uses: actions/checkout@v3
       with:
         repository: aarani/GtkSharp
-        path: dependencies/GtkSharp
+        path: GtkSharp
     # We also tested using 6.0.111 for both projects
     # but MAUI failed to build on this version with this error:
     # Could not load file or assembly 'Microsoft.CodeAnalysis, Version=4.2.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'
@@ -145,30 +146,31 @@ jobs:
     - name: ls
       run: |
         ls -la
-        ls -la dependencies/maui
-        ls -la ..
+        ls -la geewallet/dependencies/maui
+        ls -la GtkSharp
     - name: Build GtkSharp
       run: |
-        cd dependencies/GtkSharp
+        cd GtkSharp
         dotnet tool restore
         # Disable GTKSharp's cake versioning behaviour with github ci
         # beceause it breaks InstallWorkload step.
         export GITHUB_ACTIONS=
         dotnet cake build.cake --BuildVersion=3.24.24.64
         dotnet cake --BuildTarget=InstallWorkload --BuildVersion=3.24.24.64
-        cd ../..
+        cd ..
+    - name: check workloads
+      run: dotnet workload list
     - name: Add Maui Nuget source
       run: |
-        cd dependencies/maui
-        ls -la ../GtkSharp/BuildOutput/NugetPackages
-        dotnet nuget add source '../GtkSharp/BuildOutput/NugetPackages'
-        cd ../..
+        cd geewallet/dependencies/maui
+        ls -la ../../../GtkSharp/BuildOutput/NugetPackages
+        dotnet nuget add source '../../../GtkSharp/BuildOutput/NugetPackages'
+        cd ../../..
     - name: Cat for test
-      run: cat dependencies/maui/NuGet.config
+      run: cat geewallet/dependencies/maui/NuGet.config
     - name: Build GWallet
       run: |
-        cd src/GWallet.Frontend.Maui/
-        dotnet nuget add source 'dependencies/GtkSharp/BuildOutput/NugetPackages'
+        cd geewallet/src/GWallet.Frontend.Maui/
         dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk
     - name: install missing dependencies
       run: sudo apt install --yes fsharp nunit-console
