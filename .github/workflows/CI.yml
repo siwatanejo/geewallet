@@ -167,6 +167,7 @@ jobs:
       run: cat dependencies/maui/NuGet.config
     - name: Build GWallet
       run: |
+        dotnet nuget add source 'dependencies/GtkSharp/BuildOutput/NugetPackages'
         cd src/GWallet.Frontend.Maui/
         dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk
     - name: install missing dependencies
