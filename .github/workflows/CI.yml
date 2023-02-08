@@ -172,7 +172,10 @@ jobs:
       run: cat geewallet/dependencies/maui/NuGet.config
     - name: Build GWallet
       run: |
-        cd geewallet/src/GWallet.Frontend.Maui/
+        cd geewallet
+        ./configure.sh
+        make
+        cd src/GWallet.Frontend.Maui/
         pwd
         dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk
     - name: install missing dependencies
