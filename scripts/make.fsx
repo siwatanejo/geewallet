@@ -236,7 +236,7 @@ let BuildSolution
     | _ -> ()
 
 let CopyXamlFiles() = 
-    let files = [| "WelcomePage.xaml"; "WelcomePage.xaml.fs" |]
+    let files = [| "WelcomePage.xaml.fs" |]
     for file in files do
         let sourcePath = Path.Combine([| "src"; "GWallet.Frontend.XF"; file |])
         let destPath = Path.Combine([| "src"; "GWallet.Frontend.Maui"; file |])
@@ -437,6 +437,7 @@ let GetPathToBackend () =
 let MakeAll (maybeConstant: Option<string>) =
     let buildConfig = BinaryConfig.Debug
     let frontend,_ = JustBuild buildConfig maybeConstant
+    CopyXamlFiles()
     frontend,buildConfig
 
 let RunFrontend (frontend: Frontend) (buildConfig: BinaryConfig) (maybeArgs: Option<string>) =
