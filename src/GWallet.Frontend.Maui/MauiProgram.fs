@@ -23,10 +23,6 @@ type MauiProgram =
                 .UseMauiApp<App>()
 #if GTK 
                 .UseMauiCompatibility()
-        let services = appBuilder.Services
-
-        services.AddSingleton<IFontNamedSizeService, Microsoft.Maui.Controls.Compatibility.Platform.Gtk.FontNamedSizeService>() |> ignore
-        services.AddTransient<Page, WelcomePage>() |> ignore
 #endif
         appBuilder
             .ConfigureFonts(fun fonts ->
