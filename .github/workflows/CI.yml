@@ -164,21 +164,13 @@ jobs:
       run: |
         cd geewallet/dependencies/maui
         ls -la ../../../GtkSharp/BuildOutput/NugetPackages
-        dotnet nuget add source '../../../GtkSharp/BuildOutput/NugetPackages'
+        dotnet nuget add source $(realpath '../../../GtkSharp/BuildOutput/NugetPackages')
         cd ../../..
     - name: Cat for test
       run: cat geewallet/dependencies/maui/NuGet.config
     - name: Build GWallet
       run: |
         cd geewallet/src/GWallet.Frontend.Maui/
-        dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk || true
-        cd ../../dependencies/maui
-        echo "before edit"
-        cat NuGet.config
-        sed -i "s+../../../GtkSharp/BuildOutput/NugetPackages+../GtkSharp/BuildOutput/NugetPackages+g" NuGet.config
-        echo "after edit"
-        cat NuGet.config
-        cd ../../src/GWallet.Frontend.Maui/
         dotnet build GWallet.Frontend.Maui.fsproj --framework=net6.0-gtk
     - name: install missing dependencies
       run: sudo apt install --yes fsharp nunit-console
