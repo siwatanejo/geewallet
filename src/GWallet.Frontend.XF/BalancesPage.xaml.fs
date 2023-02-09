@@ -36,7 +36,16 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                       as this =
     inherit FlyoutPage()
 
-    let _ = base.LoadFromXaml(typeof<BalancesPage>)
+    do
+        base.LoadFromXaml(typeof<BalancesPage>) |> ignore
+        // Workaround for GTK. If FlyoutPage.Detail is not NavigationPage on this platform, it is always shown.
+        if Device.RuntimePlatform = Device.GTK then
+            let mainLayoutPage = ContentPage(Content = base.FindByName<StackLayout>("mainLayout"))
+            NavigationPage.SetHasNavigationBar(mainLayoutPage, false)
+            let navigationPage = NavigationPage(mainLayoutPage)
+            navigationPage.BarBackgroundColor <- Color.Transparent
+            this.Flyout.Title <- "Settings"
+            this.Detail <- navigationPage            
 
     let normalAccountsBalanceSets = normalBalanceStates.Select(fun balState -> balState.BalanceSet)
     let readOnlyAccountsBalanceSets = readOnlyBalanceStates.Select(fun balState -> balState.BalanceSet)
@@ -47,7 +56,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
     let normalChartView = base.FindByName<CircleChartView> "normalChartView"
     let readonlyChartView = base.FindByName<CircleChartView> "readonlyChartView"
     let sideMenuImg = base.FindByName<Image> "sideMenuImg"
-    let settingsImgBtn = base.FindByName<ImageButton> "settingsImgBtn"
+    let settingsButton = base.FindByName<Button> "settingsButton"
 
     let standardTimeToRefreshBalances = TimeSpan.FromMinutes 5.0
     let standardTimeToRefreshBalancesWhenThereIsImminentIncomingPaymentOrNotEnoughInfoToKnow = TimeSpan.FromMinutes 1.0
@@ -503,8 +512,21 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
         normalChartView.DefaultImageSource <- FrontendHelpers.GetSizedImageSource "logo" 512
         readonlyChartView.DefaultImageSource <- FrontendHelpers.GetSizedImageSource "logo" 512
         sideMenuImg.Source <- FrontendHelpers.GetSizedImageSource "logo" 512
-        settingsImgBtn.Source <- FrontendHelpers.GetSizedImageSource "settings" 80
+        settingsButton.ImageSource <- FrontendHelpers.GetSizedImageSource "settings" 80
 
+        if Device.RuntimePlatform = Device.GTK then
+            // fix button size to fit image, because on GTK the image is too big
+            settingsButton.ContentLayout <- Button.ButtonContentLayout(Button.ButtonContentLayout.ImagePosition.Left, 0.0)
+            let buttonImagePaddingOnGTK = 15.0 // approximate
+            settingsButton.WidthRequest <- 80.0 + buttonImagePaddingOnGTK
+            settingsButton.HeightRequest <- 80.0
+            settingsButton.BorderWidth <- 0.0
+            // close settings panel if clicked outside of it
+            let mainLayoutTapGestureRecognizer = TapGestureRecognizer()
+            mainLayoutTapGestureRecognizer.Tapped.Subscribe(fun _ -> if this.IsPresented then this.IsPresented <- false)
+                |> ignore
+            mainLayout.GestureRecognizers.Add mainLayoutTapGestureRecognizer
+        
         let tapGestureRecognizer = TapGestureRecognizer()
         tapGestureRecognizer.Tapped.Subscribe(fun _ ->
             Uri "http://www.geewallet.com"
