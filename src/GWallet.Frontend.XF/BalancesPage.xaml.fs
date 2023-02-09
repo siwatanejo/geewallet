@@ -36,7 +36,11 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                       as this =
     inherit FlyoutPage()
 
-    let _ = base.LoadFromXaml(typeof<BalancesPage>)
+    do
+        base.LoadFromXaml(typeof<BalancesPage>) |> ignore
+        // Workaround for GTK. If FlyoutPage.Detail is not NavigationPage on this platform, it is always shown.
+        if Device.RuntimePlatform = Device.GTK then
+            this.Detail <- NavigationPage(ContentPage(Content = base.FindByName<StackLayout>("mainLayout")))
 
     let normalAccountsBalanceSets = normalBalanceStates.Select(fun balState -> balState.BalanceSet)
     let readOnlyAccountsBalanceSets = readOnlyBalanceStates.Select(fun balState -> balState.BalanceSet)
