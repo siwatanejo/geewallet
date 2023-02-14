@@ -54,8 +54,8 @@
                     VerticalOptions="FillAndExpand">
 
         <!-- Settings icon-->
-        <ImageButton
-                x:Name="settingsImgBtn"
+        <Button
+                x:Name="settingsButton"
                 BackgroundColor="Transparent"
                 Padding="0"
                 HeightRequest="30"
