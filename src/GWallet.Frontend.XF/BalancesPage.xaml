@@ -54,7 +54,7 @@
                      VerticalOptions="FillAndExpand">
 
             <!-- Settings icon-->
-            <ImageButton
+            <Button
                     x:Name="settingsIcon"
                     BackgroundColor="Transparent"
                     Padding="0"
@@ -63,7 +63,6 @@
                     HorizontalOptions="Start"
                     Margin="10,10,0,0"
                     Clicked="OpenFlyout_Clicked"/>
-
 
             <StackLayout Orientation="Horizontal"
                          Padding="15, 10"
