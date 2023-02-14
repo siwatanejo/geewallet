@@ -521,6 +521,11 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             settingsButton.WidthRequest <- 80.0 + buttonImagePaddingOnGTK
             settingsButton.HeightRequest <- 80.0
             settingsButton.BorderWidth <- 0.0
+            // close settings panel if clicked outside of it
+            let mainLayoutTapGestureRecognizer = TapGestureRecognizer()
+            mainLayoutTapGestureRecognizer.Tapped.Subscribe(fun _ -> if this.IsPresented then this.IsPresented <- false)
+                |> ignore
+            mainLayout.GestureRecognizers.Add mainLayoutTapGestureRecognizer
         
         let tapGestureRecognizer = TapGestureRecognizer()
         tapGestureRecognizer.Tapped.Subscribe(fun _ ->
