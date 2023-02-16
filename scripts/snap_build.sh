@@ -8,8 +8,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y fsharp build-essential pkg-co
 
 ./configure.sh --prefix=./staging
 make
+dotnet publish -r linux-x64 -o ./src/GWallet.Frontend.Console/bin/Release ./src/GWallet.Frontend.Console/GWallet.Frontend.Console.fsproj
 make install
-dotnet publish -r linux-x64 ./src/GWallet.Frontend.Console/GWallet.Frontend.Console.fsproj
 
 #this below is to prevent the possible error "Failed to reuse files from previous run: The 'pull' step of 'gwallet' is out of date: The source has changed on disk."
 #snapcraft clean gwallet -s pull
