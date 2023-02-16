@@ -115,8 +115,8 @@ if [[ $SNAP ]]; then
 fi
 
 DIR_OF_THIS_SCRIPT=$(dirname "$(realpath "$0")")
-FRONTEND_PATH="$DIR_OF_THIS_SCRIPT/../lib/$UNIX_NAME/$GWALLET_PROJECT.exe"
-exec mono "$FRONTEND_PATH" "$@"
+FRONTEND_PATH="$DIR_OF_THIS_SCRIPT/../lib/$UNIX_NAME/net6.0/linux-x64/publish/$GWALLET_PROJECT"
+exec "$FRONTEND_PATH" "$@"
 """
 
 #if LEGACY_FRAMEWORK
