@@ -62,7 +62,11 @@ module Config =
     let internal NUMBER_OF_RETRIES_TO_SAME_SERVERS = 3u
 
     let internal GetConfigDirForThisProgram() =
-        let configPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+        let configPath = 
+            match Environment.GetEnvironmentVariable("SNAP") with
+            | snapVar when not (String.IsNullOrEmpty snapVar) -> 
+                Environment.GetEnvironmentVariable("HOME") + snapVar + ".config"
+            | _ -> Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
         let configDir = DirectoryInfo(Path.Combine(configPath, "gwallet"))
         if not configDir.Exists then
             configDir.Create()

@@ -112,7 +112,6 @@ if [[ $SNAP ]]; then
     export MONO_CFG_DIR=$SNAP/etc
     export MONO_REGISTRY_PATH=~/.mono/registry
     export MONO_GAC_PREFIX=$PKG_DIR/lib/mono/gac/
-    export XDG_CONFIG_HOME=$SNAP/.config/
 fi
 
 DIR_OF_THIS_SCRIPT=$(dirname "$(realpath "$0")")
