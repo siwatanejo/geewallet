@@ -102,6 +102,7 @@ let mainBinariesDir binaryConfig =
         binaryConfig.ToString())
     |> DirectoryInfo
 
+#if LEGACY_FRAMEWORK
 let wrapperScript = """#!/usr/bin/env bash
 set -eo pipefail
 
@@ -115,9 +116,17 @@ if [[ $SNAP ]]; then
 fi
 
 DIR_OF_THIS_SCRIPT=$(dirname "$(realpath "$0")")
+FRONTEND_PATH="$DIR_OF_THIS_SCRIPT/../lib/$UNIX_NAME/$GWALLET_PROJECT.exe"
+exec mono "$FRONTEND_PATH" "$@"
+"""
+#else
+let wrapperScript = """#!/usr/bin/env bash
+set -eo pipefail
+DIR_OF_THIS_SCRIPT=$(dirname "$(realpath "$0")")
 FRONTEND_PATH="$DIR_OF_THIS_SCRIPT/../lib/$UNIX_NAME/$GWALLET_PROJECT"
 exec "$FRONTEND_PATH" "$@"
 """
+#endif
 
 #if LEGACY_FRAMEWORK
 let PrintNugetVersion () =

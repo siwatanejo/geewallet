@@ -8,7 +8,10 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y fsharp build-essential pkg-co
 
 ./configure.sh --prefix=./staging
 make
-dotnet publish -p:PublishSingleFile=true -r linux-x64 -o ./src/GWallet.Frontend.Console/bin/Release ./src/GWallet.Frontend.Console/GWallet.Frontend.Console.fsproj
+if [ `which dotnet` ]
+then
+    dotnet publish -p:PublishSingleFile=true -r linux-x64 -o ./src/GWallet.Frontend.Console/bin/Release ./src/GWallet.Frontend.Console/GWallet.Frontend.Console.fsproj
+fi
 make install
 
 #this below is to prevent the possible error "Failed to reuse files from previous run: The 'pull' step of 'gwallet' is out of date: The source has changed on disk."
