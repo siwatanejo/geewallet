@@ -10,7 +10,7 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y fsharp build-essential pkg-co
 make
 if [ `which dotnet` ]
 then
-    dotnet publish -p:PublishSingleFile=true -r linux-x64 -o ./src/GWallet.Frontend.Console/bin/Release ./src/GWallet.Frontend.Console/GWallet.Frontend.Console.fsproj
+    make publish
 fi
 make install
 

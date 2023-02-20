@@ -7,6 +7,7 @@ open System.Diagnostics
 
 open System.Text
 open System.Text.RegularExpressions
+
 #r "System.Core.dll"
 open System.Xml
 #r "System.Xml.Linq.dll"
@@ -101,6 +102,12 @@ let mainBinariesDir binaryConfig =
         "bin",
         binaryConfig.ToString())
     |> DirectoryInfo
+
+let getRuntimeId () =
+    match Misc.GuessPlatform() with
+    | Misc.Platform.Linux -> "linux-x64"
+    | Misc.Platform.Windows -> "win-x64"
+    | Misc.Platform.Mac -> "osx-x64"
 
 #if LEGACY_FRAMEWORK
 let wrapperScript = """#!/usr/bin/env bash
@@ -445,6 +452,26 @@ match maybeTarget with
     Process.Execute(runnerCommand, Echo.All).UnwrapDefault()
     |> ignore<string>
 
+| Some "publish" ->
+#if LEGACY_FRAMEWORK
+    failwith "Legacy frameworks don't support publish command"
+#else
+    let projectPath =
+        Path.Combine (
+            FsxHelper.RootDir.FullName,
+            "src",
+            DEFAULT_FRONTEND,
+            DEFAULT_FRONTEND + ".fsproj")
+    let runtimeId = getRuntimeId()
+    let publishCommand =
+        {
+            Command = "dotnet"
+            Arguments = sprintf "publish -c Release -p:PublishSingleFile=true -r %s %s" runtimeId projectPath
+        }
+    Process.Execute(publishCommand, Echo.All).UnwrapDefault()
+    |> ignore<string>
+#endif
+
 | Some("install") ->
     let buildConfig = BinaryConfig.Release
     JustBuild buildConfig None
@@ -464,7 +491,18 @@ match maybeTarget with
 
     Console.WriteLine "Installing..."
     Console.WriteLine ()
-    Misc.CopyDirectoryRecursively (mainBinariesDir buildConfig, libDestDir, [])
+    
+    let publishDir =
+        Path.Combine ((mainBinariesDir buildConfig).FullName, "net6.0", getRuntimeId(), "publish") 
+        |> DirectoryInfo
+    if publishDir.Exists then
+        // single-file app
+        let pathToExecutable = Path.Combine(publishDir.FullName, DEFAULT_FRONTEND)
+        if not libDestDir.Exists then
+            libDestDir.Create()
+        File.Copy(pathToExecutable, Path.Combine(libDestDir.FullName, DEFAULT_FRONTEND), true)
+    else
+        Misc.CopyDirectoryRecursively (mainBinariesDir buildConfig, libDestDir, [])
 
     let finalLauncherScriptInDestDir = Path.Combine(binDestDir.FullName, launcherScriptFile.Name) |> FileInfo
     if not (Directory.Exists(finalLauncherScriptInDestDir.Directory.FullName)) then
