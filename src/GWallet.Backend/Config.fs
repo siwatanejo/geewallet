@@ -65,7 +65,7 @@ module Config =
         let configPath = 
             match Environment.GetEnvironmentVariable "SNAP" with
             | snapVar when not (String.IsNullOrEmpty snapVar) -> 
-                Environment.GetEnvironmentVariable("HOME") + snapVar + ".config"
+                 Environment.GetEnvironmentVariable("HOME") + snapVar + ".config"
             | _ -> Environment.GetFolderPath Environment.SpecialFolder.ApplicationData
         let configDir = DirectoryInfo(Path.Combine(configPath, "gwallet"))
         if not configDir.Exists then

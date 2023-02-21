@@ -5,6 +5,7 @@ open System.IO
 open System.Linq
 open System.Diagnostics
 
+open System.Runtime.InteropServices
 open System.Text
 open System.Text.RegularExpressions
 
@@ -103,11 +104,14 @@ let mainBinariesDir binaryConfig =
         binaryConfig.ToString())
     |> DirectoryInfo
 
-let getRuntimeId () =
-    match Misc.GuessPlatform() with
-    | Misc.Platform.Linux -> "linux-x64"
-    | Misc.Platform.Windows -> "win-x64"
-    | Misc.Platform.Mac -> "osx-x64"
+let GetRuntimeId () =
+    let osName =
+        match Misc.GuessPlatform() with
+        | Misc.Platform.Linux -> "linux"
+        | Misc.Platform.Windows -> "win"
+        | Misc.Platform.Mac -> "osx"
+    let archName = RuntimeInformation.ProcessArchitecture.ToString().ToLower()
+    sprintf "%s-%s" osName archName
 
 #if LEGACY_FRAMEWORK
 let wrapperScript = """#!/usr/bin/env bash
@@ -456,17 +460,22 @@ match maybeTarget with
 #if LEGACY_FRAMEWORK
     failwith "Legacy frameworks don't support publish command"
 #else
-    let projectPath =
+    let projectFile =
         Path.Combine (
             FsxHelper.RootDir.FullName,
             "src",
             DEFAULT_FRONTEND,
             DEFAULT_FRONTEND + ".fsproj")
-    let runtimeId = getRuntimeId()
+        |> FileInfo
+    let runtimeId = GetRuntimeId()
     let publishCommand =
         {
             Command = "dotnet"
-            Arguments = sprintf "publish -c Release -p:PublishSingleFile=true -r %s %s" runtimeId projectPath
+            Arguments =
+                sprintf
+                    "publish --configuration Release -p:PublishSingleFile=true --runtime %s %s"
+                    runtimeId
+                    projectFile.FullName
         }
     Process.Execute(publishCommand, Echo.All).UnwrapDefault()
     |> ignore<string>
@@ -493,16 +502,16 @@ match maybeTarget with
     Console.WriteLine ()
     
     let publishDir =
-        Path.Combine ((mainBinariesDir buildConfig).FullName, "net6.0", getRuntimeId(), "publish") 
+        Path.Combine ((mainBinariesDir buildConfig).FullName, "net6.0", GetRuntimeId(), "publish") 
         |> DirectoryInfo
     if publishDir.Exists then
         // single-file app
-        let pathToExecutable = Path.Combine(publishDir.FullName, DEFAULT_FRONTEND)
+        let executable = Path.Combine(publishDir.FullName, DEFAULT_FRONTEND) |> FileInfo
         if not libDestDir.Exists then
             libDestDir.Create()
-        File.Copy(pathToExecutable, Path.Combine(libDestDir.FullName, DEFAULT_FRONTEND), true)
+        executable.CopyTo(Path.Combine(libDestDir.FullName, DEFAULT_FRONTEND), true) |> ignore
     else
-        Misc.CopyDirectoryRecursively (mainBinariesDir buildConfig, libDestDir, [])
+        Misc.CopyDirectoryRecursively (mainBinariesDir buildConfig, libDestDir, List.empty)
 
     let finalLauncherScriptInDestDir = Path.Combine(binDestDir.FullName, launcherScriptFile.Name) |> FileInfo
     if not (Directory.Exists(finalLauncherScriptInDestDir.Directory.FullName)) then
