@@ -545,7 +545,7 @@ jobs:
       if: github.event_name == 'pull_request'
       run: ./conventions/commitlint.sh --from ${{ github.event.pull_request.head.sha }}~${{ github.event.pull_request.commits }} --to ${{ github.event.pull_request.head.sha }} --verbose
 
-  snap_pkg:
+  snap_pkg_dotnet:
 
     needs:
     - conventions
@@ -572,7 +572,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       name: Upload snap package as artifact
       with:
-        name: snap
+        name: snap-dotnet
         path: ./*.snap
 
     - name: Upload snap package to Snap Store
