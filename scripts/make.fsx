@@ -135,6 +135,12 @@ let wrapperScript = """#!/usr/bin/env bash
 set -eo pipefail
 DIR_OF_THIS_SCRIPT=$(dirname "$(realpath "$0")")
 FRONTEND_PATH="$DIR_OF_THIS_SCRIPT/../lib/$UNIX_NAME/$GWALLET_PROJECT"
+arch=$(uname -i)
+if [ "$arch" != 'x86_64' ]
+then
+    echo "Wrong processor architecture: $arch. Expected x86_64."
+    exit 1
+fi
 exec "$FRONTEND_PATH" "$@"
 """
 #endif
