@@ -473,7 +473,7 @@ match maybeTarget with
             Command = "dotnet"
             Arguments =
                 sprintf
-                    "publish --configuration Release -p:PublishSingleFile=true --runtime %s %s"
+                    "publish --configuration Release -property:PublishSingleFile=true --self-contained true --runtime %s %s"
                     runtimeId
                     projectFile.FullName
         }
@@ -511,7 +511,7 @@ match maybeTarget with
             libDestDir.Create()
         executable.CopyTo(Path.Combine(libDestDir.FullName, DEFAULT_FRONTEND), true) |> ignore
     else
-        Misc.CopyDirectoryRecursively (mainBinariesDir buildConfig, libDestDir, List.empty)
+        Misc.CopyDirectoryRecursively (mainBinariesDir buildConfig, libDestDir, List.Empty)
 
     let finalLauncherScriptInDestDir = Path.Combine(binDestDir.FullName, launcherScriptFile.Name) |> FileInfo
     if not (Directory.Exists(finalLauncherScriptInDestDir.Directory.FullName)) then
