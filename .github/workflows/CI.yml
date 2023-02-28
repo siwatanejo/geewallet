@@ -139,25 +139,25 @@ jobs:
       uses: actions/setup-dotnet@v1.7.2
       with:
         dotnet-version: '6.0.300'
-    # We need to build GtkSharp ourselves because the last shipped nuget package until now does not contain the latest changes comprising
-    # works which is needed for building the GtkSharp net6 workload (https://github.com/GtkSharp/GtkSharp/commit/60376ae510c04aa4508365993643d5cec1d2b9f1).
-    # Last shipped nuget package is version 3.24.24.24 (https://github.com/GtkSharp/GtkSharp/releases/tag/3.24.24.34) on April 2nd 2021.
-    - name: Build GtkSharp
+    - name: Install gtk workload
       run: |
-        cd dependencies/GtkSharp
-        dotnet tool restore
-        # Disable GTKSharp's cake versioning behaviour with github ci
-        # beceause it breaks InstallWorkload step.
-        export GITHUB_ACTIONS=
-        dotnet cake build.cake --BuildVersion=$GtkSharpVersion
-        dotnet cake --BuildTarget=InstallWorkload --BuildVersion=$GtkSharpVersion
-        cd ../..
+        dotnet nuget add source --username ${{ secrets.USERNAME }} --password ${{ secrets.PERSONAL_ACCESS_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/GtkSharp/index.json"
+        # For some reason automatic workload manifest detection doesn't work, so download and uzip mainfest file manually
+        wget --user ${{ secrets.USERNAME }} --password ${{ secrets.PERSONAL_ACCESS_TOKEN }} https://nuget.pkg.github.com/GtkSharp/download/gtksharp.net.sdk.gtk.manifest-6.0.300/3.24.24.77-develop/gtksharp.net.sdk.gtk.manifest-6.0.300.nupkg
+        DOTNET_DIR=/home/runner/.dotnet
+        WORKLOAD_MANIFEST_DIR=$DOTNET_DIR/sdk-manifests/6.0.300/gtksharp.net.sdk.gtk
+        unzip -j gtksharp.net.sdk.gtk.manifest-6.0.300.nupkg "data/*" -d $WORKLOAD_MANIFEST_DIR/
+        rm gtksharp.net.sdk.gtk.manifest-6.0.300.nupkg
+        chmod 764 $WORKLOAD_MANIFEST_DIR/*
+        dotnet workload search
+        dotnet workload install gtk
     - name: Add Maui Nuget source
       run: |
         cd dependencies/maui
-        dotnet nuget add source $(realpath '../GtkSharp/BuildOutput/NugetPackages')
-        cd ../../src/GWallet.Frontend.Maui/
-        dotnet nuget add source $(realpath '../../dependencies/GtkSharp/BuildOutput/NugetPackages')
+        dotnet nuget add source --username ${{ secrets.USERNAME }} --password ${{ secrets.PERSONAL_ACCESS_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/GtkSharp/index.json"
+        #cd ../..
+        #cd src/GWallet.Frontend.Maui/
+        #dotnet nuget add source --username ${{ secrets.USERNAME }} --password ${{ secrets.PERSONAL_ACCESS_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/GtkSharp/index.json"        
     - name: install missing dependencies
       run: sudo apt install --yes fsharp nunit-console
     - name: check mono version
