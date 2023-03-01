@@ -20,13 +20,8 @@ open Xamarin.Essentials
 
 open GWallet.Backend
 open GWallet.Backend.FSharpUtil.UwpHacks
-// state is unused in Maui for now because it's only used to pass it to
-// WelcomePage2() ctor, which is not created in Maui app yet
-#if !XAMARIN
-type WelcomePage(_state: FrontendHelpers.IGlobalAppState) =
-#else
+
 type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
-#endif
     inherit ContentPage()
 
     let _ = base.LoadFromXaml(typeof<WelcomePage>)
@@ -95,9 +90,6 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
         else
             None
 
-// ToggleInputWidgetsEnabledOrDisabled is not used since its usage is in another 
-// #if block.
-#if XAMARIN
     let ToggleInputWidgetsEnabledOrDisabled (enabled: bool) =
         let newCreateButtonCaption =
             if enabled then
@@ -113,7 +105,6 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
             nextButton.IsEnabled <- enabled
             nextButton.Text <- newCreateButtonCaption
         )
-#endif
 
     do
         dobDatePicker.MaximumDate <- DateTime.UtcNow.Date
@@ -142,7 +133,7 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
                     let! mainThreadSynchContext =
                         Async.AwaitTask <| MainThread.GetMainThreadSynchronizationContextAsync()
                     do! Async.SwitchToContext mainThreadSynchContext
-#if XAMARIN
+
                     let dateTime = dobDatePicker.Date
                     ToggleInputWidgetsEnabledOrDisabled false
                     do! Async.SwitchToThreadPool()
@@ -154,9 +145,9 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
                         WelcomePage2 (state, masterPrivKeyTask)
                             :> Page
                     do! FrontendHelpers.SwitchToNewPageDiscardingCurrentOneAsync this welcomePage
-#endif
                 }
 
+#if XAMARIN
         if dobDatePicker.Date.Date = middleDateEighteenYearsAgo.Date then
             let displayTask =
                 this.DisplayAlert("Alert", "The field for Date of Birth has not been set, are you sure?", "Yes, the date is correct", "Cancel")
@@ -173,6 +164,10 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
             } |> FrontendHelpers.DoubleCheckCompletionAsync false
         else
             submit () |> FrontendHelpers.DoubleCheckCompletionAsync false
+#else
+// date picker and alerts don't work in MAUI Gtk yet
+        submit () |> FrontendHelpers.DoubleCheckCompletionAsync false
+#endif    
 
     member private this.DisplayInfo() =
         this.DisplayAlert("Info", "Please note that geewallet is a brain-wallet, which means that this personal information is not registered in any server or any location outside your device, not even saved in your device. It will just be combined and hashed to generate a unique secret which is called a 'private key' which will allow you to recover your funds if you install the application again (in this or other device) later. \r\n\r\n(If it is your first time using this wallet and just want to test it quickly without any funds or low amounts, you can just input any data that is long enough to be considered valid.)", "OK")
