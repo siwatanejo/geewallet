@@ -11,6 +11,7 @@ open Microsoft.Maui.Controls
 open Microsoft.Maui.Controls.Compatibility
 open Microsoft.Maui.Controls.Compatibility.Hosting
 open Microsoft.Maui.Controls.Hosting
+open Microsoft.Maui.Handlers
 open Microsoft.Maui.Hosting
 open Microsoft.Maui.LifecycleEvents
 
@@ -21,6 +22,10 @@ type MauiProgram =
             .UseMauiApp<App>()
 #if GTK 
             .UseMauiCompatibility()
+            .ConfigureMauiHandlers(
+                fun handlers ->
+                    handlers.AddHandler(typeof<NavigationPage>, typeof<NavigationViewHandler>)
+                    |> ignore )
 #endif
             .ConfigureFonts(fun fonts ->
                 fonts
