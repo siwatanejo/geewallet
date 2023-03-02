@@ -65,6 +65,7 @@
     <Compile Include="..\GWallet.Frontend.XF\WelcomePage.xaml.fs">
       <DependentUpon>WelcomePage.xaml</DependentUpon>
     </Compile>
+	<Compile Include="..\GWallet.Frontend.XF\Initialization.fs" />
     <EmbeddedResource Include="App.xaml" />
     <Compile Include="App.xaml.fs">
       <DependentUpon>App.xaml</DependentUpon>
