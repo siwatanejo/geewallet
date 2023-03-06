@@ -15,6 +15,7 @@ open Microsoft.Maui.Handlers
 open Microsoft.Maui.Hosting
 open Microsoft.Maui.LifecycleEvents
 
+
 type MauiProgram =
     static member CreateMauiApp() =
         MauiApp
@@ -22,10 +23,6 @@ type MauiProgram =
             .UseMauiApp<App>()
 #if GTK 
             .UseMauiCompatibility()
-            .ConfigureMauiHandlers(
-                fun handlers ->
-                    handlers.AddHandler(typeof<NavigationPage>, typeof<NavigationViewHandler>)
-                    |> ignore )
 #endif
             .ConfigureFonts(fun fonts ->
                 fonts
