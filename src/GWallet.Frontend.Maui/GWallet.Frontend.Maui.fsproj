@@ -36,8 +36,8 @@
 
   <PropertyGroup Condition="$(TargetPlatformIdentifier) == 'gtk'">
     <UseMaui>false</UseMaui>
-    <MauiSubmodulePath>..\..\dependencies\maui\</MauiSubmodulePath>
-    <_MauiBuildTasksLocation>$([System.IO.Path]::GetFullPath($(MauiSubmodulePath).nuspec\))</_MauiBuildTasksLocation>
+    <MauiSubmodulePath>$(MSBuildProjectDirectory)\..\..\dependencies\maui\</MauiSubmodulePath>
+    <_MauiBuildTasksLocation>$(MauiSubmodulePath).nuspec\</_MauiBuildTasksLocation>
     <GtkProjectFolder>Platforms\Gtk\</GtkProjectFolder>
   </PropertyGroup>
 
