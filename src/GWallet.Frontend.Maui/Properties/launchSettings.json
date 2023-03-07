@@ -5,8 +5,7 @@
       "nativeDebugging": false
     },
     "Linux/Gtk" : {
-      "commandName": "Project",
-      "workingDirectory" : "/home/ubuntu/geewallet-build/geewallet/src/GWallet.Frontend.Maui/"
+      "commandName": "Project"
     }
   }
 }
