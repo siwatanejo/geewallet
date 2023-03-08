@@ -147,7 +147,6 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
                     do! FrontendHelpers.SwitchToNewPageDiscardingCurrentOneAsync this welcomePage
                 }
 
-#if XAMARIN
         if dobDatePicker.Date.Date = middleDateEighteenYearsAgo.Date then
             let displayTask =
                 this.DisplayAlert("Alert", "The field for Date of Birth has not been set, are you sure?", "Yes, the date is correct", "Cancel")
@@ -164,10 +163,6 @@ type WelcomePage(state: FrontendHelpers.IGlobalAppState) =
             } |> FrontendHelpers.DoubleCheckCompletionAsync false
         else
             submit () |> FrontendHelpers.DoubleCheckCompletionAsync false
-#else
-// date picker and alerts don't work in MAUI Gtk yet
-        submit () |> FrontendHelpers.DoubleCheckCompletionAsync false
-#endif    
 
     member private this.DisplayInfo() =
         this.DisplayAlert("Info", "Please note that geewallet is a brain-wallet, which means that this personal information is not registered in any server or any location outside your device, not even saved in your device. It will just be combined and hashed to generate a unique secret which is called a 'private key' which will allow you to recover your funds if you install the application again (in this or other device) later. \r\n\r\n(If it is your first time using this wallet and just want to test it quickly without any funds or low amounts, you can just input any data that is long enough to be considered valid.)", "OK")
