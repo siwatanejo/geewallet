@@ -1,11 +1,21 @@
-﻿namespace GWallet.Frontend.XF
+﻿#if XAMARIN
+namespace GWallet.Frontend.XF
+#else
+namespace GWallet.Frontend.Maui
+#endif
 
 open System
 open System.Linq
 
+#if !XAMARIN
+open Microsoft.Maui.Controls
+open Microsoft.Maui.Controls.Xaml
+open Microsoft.Maui.ApplicationModel
+#else
 open Xamarin.Forms
 open Xamarin.Forms.Xaml
 open Xamarin.Essentials
+#endif
 open Fsdk
 
 open GWallet.Backend
@@ -14,7 +24,11 @@ open GWallet.Backend
 /// true  if just the logo should be shown first, and title text and loading text after some seconds,
 /// false if title text and loading text should be shown immediatly.
 /// </param>
+#if XAMARIN
 type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as this =
+#else
+type LoadingPage(_state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as this =
+#endif
     inherit ContentPage()
 
     let _ = base.LoadFromXaml(typeof<LoadingPage>)
@@ -31,7 +45,7 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
                          |> List.map (fun account -> account :> IAccount)
     let readOnlyAccounts = allAccounts.OfType<ReadOnlyAccount>() |> List.ofSeq
                            |> List.map (fun account -> account :> IAccount)
-
+#if XAMARIN
     let CreateImage (currency: Currency) (readOnly: bool) =
         let colour =
             if readOnly then
@@ -55,7 +69,7 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
         }
     let PreLoadCurrencyImages(): Map<Currency*bool,Image> =
         GetAllImages() |> Map.ofSeq
-
+#endif
     let logoImageSource = FrontendHelpers.GetSizedImageSource "logo" 512
     let logoImg = Image(Source = logoImageSource, IsVisible = true)
 
@@ -93,6 +107,7 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
     new() = LoadingPage(DummyPageConstructorHelper.GlobalFuncToRaiseExceptionIfUsedAtRuntime(),false)
 
     member this.Transition(): unit =
+#if XAMARIN
         let currencyImages = PreLoadCurrencyImages()
 
         let normalAccountsBalances = FrontendHelpers.CreateWidgetsForAccounts normalAccounts currencyImages false
@@ -121,6 +136,11 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
                     :> Page
             FrontendHelpers.SwitchToNewPageDiscardingCurrentOne this balancesPage
         }
+#else
+        async {
+            ()
+        }
+#endif
             |> FrontendHelpers.DoubleCheckCompletionAsync false
 
         ()

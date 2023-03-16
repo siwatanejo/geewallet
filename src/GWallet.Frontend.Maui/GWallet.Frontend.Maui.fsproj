@@ -59,6 +59,9 @@
     <EmbeddedResource Include="WelcomePage2.xaml" />
     <Compile Include="..\GWallet.Frontend.XF\FrontendHelpers.fs" />
     <Compile Include="..\GWallet.Frontend.XF\GlobalState.fs" />
+    <Compile Include="..\GWallet.Frontend.XF\LoadingPage.xaml.fs">
+      <DependentUpon>LoadingPage.xaml</DependentUpon>
+    </Compile>
     <Compile Include="..\GWallet.Frontend.XF\WelcomePage2.xaml.fs">
       <DependentUpon>WelcomePage2.xaml</DependentUpon>
     </Compile>
