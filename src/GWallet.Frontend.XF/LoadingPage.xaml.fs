@@ -99,7 +99,7 @@ type LoadingPage(_state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) a
         )
 
         let dotsAnimationLength = TimeSpan.FromMilliseconds 500.
-        Device.StartTimer(dotsAnimationLength, Func<bool> UpdateDotsLabel)
+        FrontendHelpers.StartTimer(dotsAnimationLength, UpdateDotsLabel)
     do
         this.Init()
 
@@ -153,7 +153,7 @@ type LoadingPage(_state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) a
 
             this.Transition()
 
-            Device.StartTimer(TimeSpan.FromSeconds 5.0, fun _ ->
+            FrontendHelpers.StartTimer(TimeSpan.FromSeconds 5.0, fun _ ->
                 ShowLoadingText()
 
                 false // do not run timer again
