@@ -8,6 +8,7 @@ open System
 open System.Linq
 
 #if !XAMARIN
+open Microsoft.Maui
 open Microsoft.Maui.Controls
 open Microsoft.Maui.Controls.Xaml
 open Microsoft.Maui.ApplicationModel
@@ -40,12 +41,13 @@ type LoadingPage(_state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) a
     let dotsMaxCount = 3
     let loadingTextNoDots = loadingLabel.Text
 
+#if XAMARIN
     let allAccounts = Account.GetAllActiveAccounts()
     let normalAccounts = allAccounts.OfType<NormalAccount>() |> List.ofSeq
                          |> List.map (fun account -> account :> IAccount)
     let readOnlyAccounts = allAccounts.OfType<ReadOnlyAccount>() |> List.ofSeq
                            |> List.map (fun account -> account :> IAccount)
-#if XAMARIN
+                           
     let CreateImage (currency: Currency) (readOnly: bool) =
         let colour =
             if readOnly then
