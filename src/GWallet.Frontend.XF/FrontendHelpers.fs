@@ -434,8 +434,7 @@ module FrontendHelpers =
 #if XAMARIN
         Device.StartTimer(interval, Func<bool> action)
 #else
-        let timer = Application.Current.Dispatcher.CreateTimer()
-        timer.Interval <- interval
+        let timer = Application.Current.Dispatcher.CreateTimer(Interval = interval, IsRepeating = true)
         timer.Tick.Add(fun _ ->
             if not <| action() then timer.Stop() )
         timer.Start()
