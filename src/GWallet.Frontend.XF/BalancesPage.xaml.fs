@@ -1,16 +1,34 @@
-﻿namespace GWallet.Frontend.XF
+﻿#if XAMARIN
+namespace GWallet.Frontend.XF
+#else
+namespace GWallet.Frontend.Maui
+#nowarn "1182"
+#endif
 
 open System
 open System.Linq
 open System.Threading
 open System.Threading.Tasks
 
+#if !XAMARIN
+open Microsoft.Maui
+open Microsoft.Maui.Controls
+open Microsoft.Maui.Controls.Xaml
+open Microsoft.Maui.ApplicationModel
+open Microsoft.Maui.Networking
+#else
 open Xamarin.Forms
 open Xamarin.Forms.Xaml
 open Xamarin.Essentials
+#endif
+
 open Fsdk
 
+#if XAMARIN
 open GWallet.Frontend.XF.Controls
+#else
+open GWallet.Frontend.Maui.Controls
+#endif
 open GWallet.Backend
 open GWallet.Backend.FSharpUtil.UwpHacks
 
@@ -217,7 +235,12 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
         let activeCurrencyClassId,inactiveCurrencyClassId =
             FrontendHelpers.GetActiveAndInactiveCurrencyClassIds readOnly
 
-        let contentLayoutChildrenList = (contentLayout.Children |> List.ofSeq)
+        let contentLayoutChildrenList =
+#if XAMARIN
+            (contentLayout.Children |> List.ofSeq)
+#else
+            contentLayout.Children |> Seq.choose (function :? View as view -> Some view | _ -> None) |> List.ofSeq
+#endif
 
         let activeCryptoBalances = FindCryptoBalances activeCurrencyClassId 
                                                       contentLayout 
@@ -242,12 +265,14 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             for balanceState in balances do
                 let balanceSet = balanceState.BalanceSet
                 let tapGestureRecognizer = TapGestureRecognizer()
+#if XAMARIN                
                 tapGestureRecognizer.Tapped.Subscribe(fun _ ->
                     let receivePage () =
                         ReceivePage(balanceSet.Account, balanceState.UsdRate, this, balanceSet.Widgets)
                             :> Page
                     FrontendHelpers.SwitchToNewPage this receivePage true
                 ) |> ignore
+#endif                
                 let frame = balanceSet.Widgets.Frame
                 frame.GestureRecognizers.Add tapGestureRecognizer
                 contentLayout.Children.Add frame
@@ -362,7 +387,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                 //Avoid cases when user changes timezone in device settings
                 TimeSpan.Zero
                 
-        Device.StartTimer(timerInterval + timerStartDelay, fun _ ->
+        FrontendHelpers.StartTimer(timerInterval + timerStartDelay, fun _ ->
             if not cancellationToken.IsCancellationRequested then
                 async {
                     try
@@ -410,6 +435,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             mainLayout.FindByName<CircleChartView> otherChartViewName
 
         let tapGestureRecognizer = TapGestureRecognizer()
+#if XAMARIN
         tapGestureRecognizer.Tapped.Add(fun _ ->
 
             let shouldNotOpenNewPage =
@@ -456,9 +482,9 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                         let page () =
                             PairingFromPage(this, "Copy wallet info to clipboard", walletInfoJson, None)
                                 :> Page
-                        FrontendHelpers.SwitchToNewPage this page true
-
+                        FrontendHelpers.SwitchToNewPage this page true 
         )
+#endif       
         totalCurrentFiatAmountFrame.GestureRecognizers.Add tapGestureRecognizer
         tapGestureRecognizer
 
@@ -471,7 +497,11 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
         RedrawCircleView false normalBalanceStates
 
         if startWithReadOnlyAccounts then
+#if XAMARIN            
             tapper.SendTapped null
+#else
+            () // No tapper.SendTapped in MAUI
+#endif
 
     member private this.AssignColorLabels (readOnly: bool) =
         let labels,color =
