@@ -1,11 +1,23 @@
-﻿namespace GWallet.Frontend.XF.Controls
+﻿#if XAMARIN
+namespace GWallet.Frontend.XF.Controls
+#else
+namespace GWallet.Frontend.Maui.Controls
+#nowarn "44"
+#endif
 
 open System
 open System.Linq
 open System.Globalization
 
+#if !XAMARIN
+open Microsoft.Maui
+open Microsoft.Maui.Controls
+open Microsoft.Maui.Graphics
+open Microsoft.Maui.Controls.Shapes
+#else
 open Xamarin.Forms
 open Xamarin.Forms.Shapes
+#endif
 
 type SegmentInfo =
     {
@@ -30,7 +42,13 @@ type CircleChartView () =
                                 typeof<float>, typeof<CircleChartView>, 0.)
     static let separatorColorProperty =
         BindableProperty.Create("SeparatorColor",
-                                typeof<Color>, typeof<CircleChartView>, Color.Transparent)
+                                typeof<Color>, typeof<CircleChartView>,
+#if XAMARIN                                
+                                Color.Transparent
+#else
+                                Colors.Transparent
+#endif
+                                )
     static let defaultImageSourceProperty =
         BindableProperty.Create("DefaultImageSource",
                                 typeof<ImageSource>, typeof<CircleChartView>, null)

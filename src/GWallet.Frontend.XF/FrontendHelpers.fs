@@ -8,8 +8,13 @@ open System.Linq
 open System.Threading.Tasks
 
 #if !XAMARIN
+open Microsoft.Maui
+open Microsoft.Maui.Graphics
 open Microsoft.Maui.Controls
 open Microsoft.Maui.ApplicationModel
+open Microsoft.Maui.Layouts
+type Color = Microsoft.Maui.Graphics.Colors
+#nowarn "44"
 #else
 open Xamarin.Forms
 open Xamarin.Essentials
@@ -59,7 +64,7 @@ module FrontendHelpers =
         | _ ->
             // TODO: report a sentry warning
             false
-
+#endif
     let internal BigFontSize = 22.
 
     let internal MediumFontSize = 20.
@@ -205,8 +210,14 @@ module FrontendHelpers =
         let fullJob =
             let UpdateProgressBar (progressBar: StackLayout) =
                 MainThread.BeginInvokeOnMainThread(fun _ ->
+                    let progressBarChildren =
+#if XAMARIN
+                        progressBar.Children
+#else
+                        progressBar |> Seq.choose(function | :? View as view -> Some view | _ -> None )
+#endif
                     let firstTransparentFrameFound =
-                        progressBar.Children.First(fun x -> x.BackgroundColor = Color.Transparent)
+                        progressBarChildren.First(fun x -> x.BackgroundColor = Color.Transparent)
                     firstTransparentFrameFound.BackgroundColor <- GetCryptoColor balanceSet.Account.Currency
                 )
             async {
@@ -239,7 +250,7 @@ module FrontendHelpers =
         let allCancelSources =
             Seq.map fst sourcesAndJobs
         allCancelSources,parallelJobs
-#endif
+
     let private MaybeCrash (canBeCanceled: bool) (ex: Exception) =
         let LastResortBail() =
             // this is just in case the raise(throw) doesn't really tear down the program:
@@ -323,7 +334,7 @@ module FrontendHelpers =
                 |> Async.AwaitTask
             return ()
         }
-#if XAMARIN
+
     let ChangeTextAndChangeBack (button: Button) (newText: string) =
         let initialText = button.Text
         button.IsEnabled <- false
@@ -363,9 +374,19 @@ module FrontendHelpers =
         let colorBox = BoxView(Color = GetCryptoColor currency)
 
         let absoluteLayout = AbsoluteLayout(Margin = Thickness(0., 1., 3., 1.))
+#if XAMARIN        
         absoluteLayout.Children.Add(stackLayout, Rectangle(0., 0., 1., 1.), AbsoluteLayoutFlags.All)
         absoluteLayout.Children.Add(colorBox, Rectangle(1., 0., colorBoxWidth, 1.), AbsoluteLayoutFlags.PositionProportional ||| AbsoluteLayoutFlags.HeightProportional)
-
+#else
+        absoluteLayout.Add(stackLayout)
+        absoluteLayout.SetLayoutBounds(stackLayout, Rect(0., 0., 1., 1.))
+        absoluteLayout.SetLayoutFlags(stackLayout, AbsoluteLayoutFlags.All)
+        
+        absoluteLayout.Add(colorBox)
+        absoluteLayout.SetLayoutBounds(colorBox, Rect(1., 0., colorBoxWidth, 1.))
+        absoluteLayout.SetLayoutFlags(colorBox, AbsoluteLayoutFlags.PositionProportional ||| AbsoluteLayoutFlags.HeightProportional)
+#endif
+#if XAMARIN
         //TODO: remove this workaround once https://github.com/xamarin/Xamarin.Forms/pull/5207 is merged
         if Device.RuntimePlatform = Device.macOS then
             let bindImageSize bindableProperty =
@@ -374,7 +395,7 @@ module FrontendHelpers =
 
             bindImageSize VisualElement.WidthRequestProperty
             bindImageSize VisualElement.HeightRequestProperty
-
+#endif
         let frame = Frame(HasShadow = false,
                           ClassId = classId,
                           Content = absoluteLayout,
@@ -404,7 +425,7 @@ module FrontendHelpers =
                     Widgets = balanceWidgets
                 }
         } |> List.ofSeq
-
+#if XAMARIN
     let BarCodeScanningOptions = MobileBarcodeScanningOptions(
                                      TryHarder = Nullable<bool> true,
                                      DisableAutofocus = false,
