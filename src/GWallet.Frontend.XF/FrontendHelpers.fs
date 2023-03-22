@@ -361,25 +361,45 @@ module FrontendHelpers =
         else
             normalCryptoBalanceClassId,readonlyCryptoBalanceClassId
 
-    let CreateCurrencyBalanceFrame currency (cryptoLabel: Label) (fiatLabel: Label) (currencyLogoImg: IView) classId =
+    let CreateCurrencyBalanceFrame currency (cryptoLabel: Label) (fiatLabel: Label) (currencyLogoImg: View) classId =
         let colorBoxWidth = 10.
 
-        let innerLayout = Grid(Padding = Thickness(20., 20., 10., 20.))
-        innerLayout.ColumnDefinitions.Add(ColumnDefinition(GridLength(currencyLogoImg.Width + 10.0)))
-        innerLayout.ColumnDefinitions.Add(ColumnDefinition(GridLength.Auto))
-        innerLayout.ColumnDefinitions.Add(ColumnDefinition())
-        
-        innerLayout.Add(currencyLogoImg, 0)
-        innerLayout.Add(cryptoLabel, 1)
-        innerLayout.Add(fiatLabel, 2)
+        let outerLayout =
+#if XAMARIN
+            let stackLayout = StackLayout(Orientation = StackOrientation.Horizontal,
+                                          Padding = Thickness(20., 20., colorBoxWidth + 10., 20.))
 
-        let outerLayout = Grid(Margin = Thickness(0., 1., 3., 1.))
-        outerLayout.ColumnDefinitions.Add(ColumnDefinition())
-        outerLayout.ColumnDefinitions.Add(ColumnDefinition(colorBoxWidth))
+            stackLayout.Children.Add currencyLogoImg
+            stackLayout.Children.Add cryptoLabel
+            stackLayout.Children.Add fiatLabel
 
-        let colorBox = BoxView(Color = GetCryptoColor currency)
-        outerLayout.Add(innerLayout, 0)
-        outerLayout.Add(colorBox, 1)
+            let colorBox = BoxView(Color = GetCryptoColor currency)
+
+            let absoluteLayout = AbsoluteLayout(Margin = Thickness(0., 1., 3., 1.))
+           
+            absoluteLayout.Children.Add(stackLayout, Rectangle(0., 0., 1., 1.), AbsoluteLayoutFlags.All)
+            absoluteLayout.Children.Add(colorBox, Rectangle(1., 0., colorBoxWidth, 1.), AbsoluteLayoutFlags.PositionProportional ||| AbsoluteLayoutFlags.HeightProportional)
+
+            absoluteLayout
+#else
+            let innerLayout = Grid(Padding = Thickness(20., 20., 10., 20.))
+            innerLayout.ColumnDefinitions.Add(ColumnDefinition(GridLength(currencyLogoImg.Width + 10.0)))
+            innerLayout.ColumnDefinitions.Add(ColumnDefinition(GridLength.Auto))
+            innerLayout.ColumnDefinitions.Add(ColumnDefinition())
+            
+            innerLayout.Add(currencyLogoImg, 0)
+            innerLayout.Add(cryptoLabel, 1)
+            innerLayout.Add(fiatLabel, 2)
+
+            let outerLayout = Grid(Margin = Thickness(0., 1., 3., 1.))
+            outerLayout.ColumnDefinitions.Add(ColumnDefinition())
+            outerLayout.ColumnDefinitions.Add(ColumnDefinition(colorBoxWidth))
+
+            let colorBox = BoxView(Color = GetCryptoColor currency)
+            outerLayout.Add(innerLayout, 0)
+            outerLayout.Add(colorBox, 1)
+            outerLayout
+#endif
 #if XAMARIN
         //TODO: remove this workaround once https://github.com/xamarin/Xamarin.Forms/pull/5207 is merged
         if Device.RuntimePlatform = Device.macOS then

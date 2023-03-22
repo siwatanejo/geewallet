@@ -54,9 +54,12 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
         let imageSize = 60
         let imageSource = FrontendHelpers.GetSizedColoredImageSource currencyLowerCase colour imageSize
         let currencyLogoImg = Image(Source = imageSource, IsVisible = true)
-        let scalingFactor = DeviceDisplay.Current.MainDisplayInfo.Density
+#if !XAMARIN
+        let scalingFactor =
+            DeviceDisplay.Current.MainDisplayInfo.Density
         currencyLogoImg.WidthRequest <- float(imageSize) / scalingFactor
         currencyLogoImg.HeightRequest <- float(imageSize) / scalingFactor
+#endif
         currencyLogoImg
     let GetAllCurrencyCases(): seq<Currency*bool> =
         seq {
