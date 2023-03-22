@@ -28,7 +28,7 @@ type SegmentInfo =
 type CircleChartView () =
     inherit ContentView () 
 
-    let shapesPath = @"M{0},{1} A{2},{2} 0 {3} 1 {4} {5} L {6} {7}"
+    let shapesPath = @"M{0},{1} A{2},{2} 0 {3} 1 {4} {5} L {6} {7}Z"
 
     static let segmentsSourceProperty =
         BindableProperty.Create("SegmentsSource",
@@ -151,6 +151,10 @@ type CircleChartView () =
                             StrokeThickness = 0.,
                             Stroke = null
                         )
+#if !XAMARIN
+                    // workaround for https://github.com/dotnet/maui/issues/9089
+                    helperView.Aspect <- enum 4
+#endif
                     gridLayout.Children.Add helperView
 
                     addSliceToView tail endPercentage
