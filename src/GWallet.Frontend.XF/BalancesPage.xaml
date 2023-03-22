@@ -8,11 +8,11 @@
                  Padding="0,0,0,0"
                  VerticalOptions="FillAndExpand">
 
-        <StackLayout Orientation="Horizontal"
-                     Padding="15, 10"
-                     Spacing="30"
-                     VerticalOptions="FillAndExpand"
-                     HorizontalOptions="FillAndExpand">         
+        <Grid ColumnDefinitions="Auto, *"
+              Padding="15, 10"
+              ColumnSpacing="30"
+              VerticalOptions="FillAndExpand"
+              HorizontalOptions="FillAndExpand">         
 
             <!-- we add {V|H}Options=Center* not only to the Label, as a workaround to
             https://github.com/xamarin/Xamarin.Forms/issues/4655 -->
@@ -22,6 +22,7 @@
                    BorderColor="Transparent"
                    VerticalOptions="CenterAndExpand"
                    HorizontalOptions="End"
+                   Grid.Column="0"
                    Padding="0"
                    Margin="0,0,0,0">
                 <StackLayout x:Name="totalFiatAmountLayout"
@@ -45,6 +46,7 @@
                    BorderColor="Transparent"
                    VerticalOptions="CenterAndExpand"
                    HorizontalOptions="End"
+                   Grid.Column="0"
                    Padding="0"
                    Margin="0,0,0,0">
                 <StackLayout x:Name="totalReadOnlyFiatAmountLayout"
@@ -63,14 +65,16 @@
 
             <controls:CircleChartView x:Name="normalChartView"
                                      HorizontalOptions="FillAndExpand"
-                                     VerticalOptions="FillAndExpand"/>
+                                     VerticalOptions="FillAndExpand"
+                                     Grid.Column="1"/>
             
             <controls:CircleChartView x:Name="readonlyChartView"
                                      IsVisible="False"
                                      HorizontalOptions="FillAndExpand"
-                                     VerticalOptions="FillAndExpand"/>
+                                     VerticalOptions="FillAndExpand"
+                                     Grid.Column="1"/>
 
-        </StackLayout>
+        </Grid>
 
         <ScrollView HorizontalOptions="FillAndExpand">
             <StackLayout x:Name="contentLayout" />
