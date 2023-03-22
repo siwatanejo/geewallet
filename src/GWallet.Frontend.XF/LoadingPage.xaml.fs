@@ -12,6 +12,7 @@ open Microsoft.Maui
 open Microsoft.Maui.Controls
 open Microsoft.Maui.Controls.Xaml
 open Microsoft.Maui.ApplicationModel
+open Microsoft.Maui.Devices
 #else
 open Xamarin.Forms
 open Xamarin.Forms.Xaml
@@ -50,8 +51,12 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
             else
                 "red"
         let currencyLowerCase = currency.ToString().ToLower()
-        let imageSource = FrontendHelpers.GetSizedColoredImageSource currencyLowerCase colour 60
+        let imageSize = 60
+        let imageSource = FrontendHelpers.GetSizedColoredImageSource currencyLowerCase colour imageSize
         let currencyLogoImg = Image(Source = imageSource, IsVisible = true)
+        let scalingFactor = DeviceDisplay.Current.MainDisplayInfo.Density
+        currencyLogoImg.WidthRequest <- float(imageSize) / scalingFactor
+        currencyLogoImg.HeightRequest <- float(imageSize) / scalingFactor
         currencyLogoImg
     let GetAllCurrencyCases(): seq<Currency*bool> =
         seq {

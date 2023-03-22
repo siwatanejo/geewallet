@@ -361,31 +361,25 @@ module FrontendHelpers =
         else
             normalCryptoBalanceClassId,readonlyCryptoBalanceClassId
 
-    let CreateCurrencyBalanceFrame currency (cryptoLabel: Label) (fiatLabel: Label) currencyLogoImg classId =
+    let CreateCurrencyBalanceFrame currency (cryptoLabel: Label) (fiatLabel: Label) (currencyLogoImg: IView) classId =
         let colorBoxWidth = 10.
 
-        let stackLayout = StackLayout(Orientation = StackOrientation.Horizontal,
-                                      Padding = Thickness(20., 20., colorBoxWidth + 10., 20.))
+        let innerLayout = Grid(Padding = Thickness(20., 20., 10., 20.))
+        innerLayout.ColumnDefinitions.Add(ColumnDefinition(GridLength(currencyLogoImg.Width + 10.0)))
+        innerLayout.ColumnDefinitions.Add(ColumnDefinition(GridLength.Auto))
+        innerLayout.ColumnDefinitions.Add(ColumnDefinition())
+        
+        innerLayout.Add(currencyLogoImg, 0)
+        innerLayout.Add(cryptoLabel, 1)
+        innerLayout.Add(fiatLabel, 2)
 
-        stackLayout.Children.Add currencyLogoImg
-        stackLayout.Children.Add cryptoLabel
-        stackLayout.Children.Add fiatLabel
+        let outerLayout = Grid(Margin = Thickness(0., 1., 3., 1.))
+        outerLayout.ColumnDefinitions.Add(ColumnDefinition())
+        outerLayout.ColumnDefinitions.Add(ColumnDefinition(colorBoxWidth))
 
         let colorBox = BoxView(Color = GetCryptoColor currency)
-
-        let absoluteLayout = AbsoluteLayout(Margin = Thickness(0., 1., 3., 1.))
-#if XAMARIN        
-        absoluteLayout.Children.Add(stackLayout, Rectangle(0., 0., 1., 1.), AbsoluteLayoutFlags.All)
-        absoluteLayout.Children.Add(colorBox, Rectangle(1., 0., colorBoxWidth, 1.), AbsoluteLayoutFlags.PositionProportional ||| AbsoluteLayoutFlags.HeightProportional)
-#else
-        absoluteLayout.Add(stackLayout)
-        absoluteLayout.SetLayoutBounds(stackLayout, Rect(0., 0., 1., 1.))
-        absoluteLayout.SetLayoutFlags(stackLayout, AbsoluteLayoutFlags.All)
-        
-        absoluteLayout.Add(colorBox)
-        absoluteLayout.SetLayoutBounds(colorBox, Rect(1., 0., colorBoxWidth, 1.))
-        absoluteLayout.SetLayoutFlags(colorBox, AbsoluteLayoutFlags.PositionProportional ||| AbsoluteLayoutFlags.HeightProportional)
-#endif
+        outerLayout.Add(innerLayout, 0)
+        outerLayout.Add(colorBox, 1)
 #if XAMARIN
         //TODO: remove this workaround once https://github.com/xamarin/Xamarin.Forms/pull/5207 is merged
         if Device.RuntimePlatform = Device.macOS then
@@ -398,7 +392,7 @@ module FrontendHelpers =
 #endif
         let frame = Frame(HasShadow = false,
                           ClassId = classId,
-                          Content = absoluteLayout,
+                          Content = outerLayout,
                           Padding = Thickness(0.),
                           BorderColor = Color.SeaShell)
         frame
