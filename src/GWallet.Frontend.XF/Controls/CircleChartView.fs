@@ -124,38 +124,46 @@ type CircleChartView () =
                     let endCoordinatesX = x + (radius * Math.Cos(2.0 * Math.PI * endPercentage))
                     let endCoordinatesY = y + (radius * Math.Sin(2.0 * Math.PI * endPercentage))
                     
-                    let arc =
-                        if item.Percentage > 0.5 then
-                            "1"
-                        else
-                            "0"
-                    
-                    let path =
-                        String.Format (
-                            shapesPath,
-                            startCoordinatesX.ToString nfi,
-                            startCoordinatesY.ToString nfi,
-                            radius.ToString nfi,
-                            arc,
-                            endCoordinatesX.ToString nfi,
-                            endCoordinatesY.ToString nfi,
-                            x.ToString nfi,
-                            y.ToString nfi
-                        )                    
-
-                    let pathGeometry = converter.ConvertFromInvariantString path :?> Geometry
-                    let helperView =
-                        Path (
-                            Data = pathGeometry,
-                            Fill = SolidColorBrush item.Color,
-                            StrokeThickness = 0.,
-                            Stroke = null
-                        )
-#if !XAMARIN
-                    // workaround for https://github.com/dotnet/maui/issues/9089
-                    helperView.Aspect <- enum 4
+                    let sectorIsTooSmall =
+#if !XAMARIN && GTK                        
+                        let arcLength = item.Percentage * 2.0 * Math.PI * radius
+                        arcLength < 1.0
+#else
+                        false
 #endif
-                    gridLayout.Children.Add helperView
+                    if not sectorIsTooSmall then
+                        let arc =
+                            if item.Percentage > 0.5 then
+                                "1"
+                            else
+                                "0"
+                        
+                        let path =
+                            String.Format (
+                                shapesPath,
+                                startCoordinatesX.ToString nfi,
+                                startCoordinatesY.ToString nfi,
+                                radius.ToString nfi,
+                                arc,
+                                endCoordinatesX.ToString nfi,
+                                endCoordinatesY.ToString nfi,
+                                x.ToString nfi,
+                                y.ToString nfi
+                            )                    
+
+                        let pathGeometry = converter.ConvertFromInvariantString path :?> Geometry
+                        let helperView =
+                            Path (
+                                Data = pathGeometry,
+                                Fill = SolidColorBrush item.Color,
+                                StrokeThickness = 0.,
+                                Stroke = null
+                            )
+#if !XAMARIN
+                        // workaround for https://github.com/dotnet/maui/issues/9089
+                        helperView.Aspect <- enum 4
+#endif
+                        gridLayout.Children.Add helperView
 
                     addSliceToView tail endPercentage
                    
