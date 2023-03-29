@@ -384,7 +384,7 @@ module FrontendHelpers =
 #else
             let innerLayout = Grid(Padding = Thickness(20., 20., 10., 20.))
             innerLayout.ColumnDefinitions.Add(ColumnDefinition(GridLength(currencyLogoImg.WidthRequest + 10.0)))
-            innerLayout.ColumnDefinitions.Add(ColumnDefinition())
+            innerLayout.ColumnDefinitions.Add(ColumnDefinition(GridLength.Auto))
             innerLayout.ColumnDefinitions.Add(ColumnDefinition())
             
             innerLayout.Add(currencyLogoImg, 0)
