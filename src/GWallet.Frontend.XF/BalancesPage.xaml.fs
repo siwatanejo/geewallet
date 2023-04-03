@@ -420,7 +420,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             cancelSource.Cancel()
             cancelSource.Dispose()
 
-    member private this.ConfigureFiatAmountFrame (readOnly: bool): TapGestureRecognizer =
+    member private this.ConfigureFiatAmountFrame (readOnly: bool): (unit -> unit) =
         let totalCurrentFiatAmountFrameName,totalOtherFiatAmountFrameName =
             if readOnly then
                 "totalReadOnlyFiatAmountFrame","totalFiatAmountFrame"
@@ -444,9 +444,8 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             mainLayout.FindByName<CircleChartView> otherChartViewName
 
         let tapGestureRecognizer = TapGestureRecognizer()
-#if XAMARIN
-        tapGestureRecognizer.Tapped.Add(fun _ ->
 
+        let tapHandler () =
             let shouldNotOpenNewPage =
                 if switchingToReadOnly then
                     readOnlyAccountsBalanceSets.Any()
@@ -491,26 +490,23 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                         let page () =
                             PairingFromPage(this, "Copy wallet info to clipboard", walletInfoJson, None)
                                 :> Page
-                        FrontendHelpers.SwitchToNewPage this page true 
-        )
-#endif       
+                        FrontendHelpers.SwitchToNewPage this page true
+        
+        tapGestureRecognizer.Tapped.Add(fun _ -> tapHandler())
+        
         totalCurrentFiatAmountFrame.GestureRecognizers.Add tapGestureRecognizer
-        tapGestureRecognizer
+        tapHandler
 
     member this.PopulateGridInitially () =
 
-        let tapper = this.ConfigureFiatAmountFrame false
+        let tapHandler = this.ConfigureFiatAmountFrame false
         this.ConfigureFiatAmountFrame true |> ignore
 
         this.PopulateBalances false normalBalanceStates
         RedrawCircleView false normalBalanceStates
 
         if startWithReadOnlyAccounts then
-#if XAMARIN            
-            tapper.SendTapped null
-#else
-            () // No tapper.SendTapped in MAUI
-#endif
+            tapHandler()
 
     member private this.AssignColorLabels (readOnly: bool) =
         let labels,color =
