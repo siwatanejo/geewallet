@@ -543,7 +543,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
         let tapGestureRecognizer = TapGestureRecognizer()
         tapGestureRecognizer.Tapped.Add(fun _ ->
             Uri "http://www.geewallet.com"
-                |> Xamarin.Essentials.Launcher.OpenAsync
+                |> Launcher.OpenAsync
                 |> FrontendHelpers.DoubleCheckCompletionNonGeneric
         )
 #if !XAMARIN && GTK
