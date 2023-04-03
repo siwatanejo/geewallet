@@ -444,7 +444,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             mainLayout.FindByName<CircleChartView> otherChartViewName
 
         let tapGestureRecognizer = TapGestureRecognizer()
-#if XAMARIN
+        
         tapGestureRecognizer.Tapped.Add(fun _ ->
 
             let shouldNotOpenNewPage =
@@ -493,7 +493,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                                 :> Page
                         FrontendHelpers.SwitchToNewPage this page true 
         )
-#endif       
+        
         totalCurrentFiatAmountFrame.GestureRecognizers.Add tapGestureRecognizer
         tapGestureRecognizer
 
