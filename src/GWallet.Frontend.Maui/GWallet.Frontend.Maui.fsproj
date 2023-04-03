@@ -182,10 +182,10 @@
     <Compile Include="Resources\Styles\Styles.fs" />
   </ItemGroup>
 
-  <ItemGroup />
-
   <ItemGroup>
     <PackageReference Include="FSharp.Core" Version="6.0.3" />
+    <PackageReference Include="ZXing.Net.Maui" Version="0.2.0-preview.2" />
+    <PackageReference Include="ZXing.Net.Maui.Controls" Version="0.2.0-preview.2" />
   </ItemGroup>
 
   <ItemGroup Condition="$(TargetPlatformIdentifier) == 'gtk'">
