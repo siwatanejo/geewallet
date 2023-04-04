@@ -14,6 +14,7 @@ open Microsoft.Maui.Controls
 open Microsoft.Maui.Controls.Xaml
 open Microsoft.Maui.ApplicationModel
 open Microsoft.Maui.Networking
+open Microsoft.Maui.Devices
 
 open ZXing.Net.Maui
 open ZXing.Net.Maui.Controls
@@ -87,13 +88,19 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                 ()
             return usdRate
         } |> Async.StartImmediateAsTask
+    let canScanBarcode =
+#if XAMARIN
+        Device.RuntimePlatform = Device.Android || Device.RuntimePlatform = Device.iOS
+#else
+        DeviceInfo.Platform = DevicePlatform.Android || DeviceInfo.Platform = DevicePlatform.iOS
+#endif
     do
         let accountCurrency = account.Currency.ToString()
         currencySelectorPicker.Items.Add "USD"
         currencySelectorPicker.Items.Add accountCurrency
         currencySelectorPicker.SelectedItem <- accountCurrency
 
-        if Device.RuntimePlatform = Device.Android || Device.RuntimePlatform = Device.iOS then
+        if canScanBarcode then
             destinationScanQrCodeButton.IsVisible <- true
 
         sendOrSignButton.Text <- sendCaption
@@ -130,34 +137,15 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
         let mainLayout = base.FindByName<StackLayout> "mainLayout"
         let transactionEntry = mainLayout.FindByName<Entry> "transactionEntry"
         let scanPage = 
-#if XAMARIN
-            let scanPage = ZXingScannerPage FrontendHelpers.BarCodeScanningOptions
-            scanPage.add_OnScanResult(fun result ->
-                scanPage.IsScanning <- false
+                    FrontendHelpers.GetBarcodeScannerPage 
+                        (fun barcodeString ->
+                            MainThread.BeginInvokeOnMainThread(fun _ ->
+                                // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
+                                //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
+                                let task = this.Navigation.PopModalAsync()
+                                transactionEntry.Text <- barcodeString
+                                task |> FrontendHelpers.DoubleCheckCompletionNonGeneric) )
 
-                MainThread.BeginInvokeOnMainThread(fun _ ->
-                    // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
-                    //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                    let task = this.Navigation.PopModalAsync()
-                    transactionEntry.Text <- result.Text
-                    task |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-                )
-            )
-            scanPage
-#else
-            let scanView = ZXing.Net.Maui.Controls.CameraBarcodeReaderView(Options = FrontendHelpers.BarCodeScanningOptions)
-            scanView.BarcodesDetected.Add(fun result ->
-                MainThread.BeginInvokeOnMainThread(fun _ ->
-                    // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
-                    //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                    let task = this.Navigation.PopModalAsync()
-                    let barCodeText = result.Results.[0].Value // assume our barcode is first result?
-                    transactionEntry.Text <- barCodeText
-                    task |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-                )
-            )
-            ContentPage(Content = scanView)
-#endif
         MainThread.BeginInvokeOnMainThread(fun _ ->
             // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
             //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
@@ -165,15 +153,12 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                 |> FrontendHelpers.DoubleCheckCompletionNonGeneric
         )
 
-    member this.OnScanQrCodeButtonClicked(_sender: Object, _args: EventArgs): unit =
-#if XAMARIN        
+    member this.OnScanQrCodeButtonClicked(_sender: Object, _args: EventArgs): unit =     
         let mainLayout = base.FindByName<StackLayout>("mainLayout")
-        let scanPage = ZXingScannerPage FrontendHelpers.BarCodeScanningOptions
-        scanPage.add_OnScanResult(fun result ->
-            if null = result || String.IsNullOrEmpty result.Text then
-                failwith "result of scanning was null(?)"
 
-            scanPage.IsScanning <- false
+        let onScan barcodeText =
+            if String.IsNullOrEmpty barcodeText then
+                failwith "result of scanning was null(?)"
 
             MainThread.BeginInvokeOnMainThread(fun _ ->
                 // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
@@ -184,8 +169,8 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                     match account.Currency with
                     | Currency.BTC
                     | Currency.LTC ->
-                        UtxoCoin.Account.ParseAddressOrUrl result.Text account.Currency
-                    | _ -> result.Text,None
+                        UtxoCoin.Account.ParseAddressOrUrl barcodeText account.Currency
+                    | _ -> barcodeText,None
 
                 destinationAddressEntry.Text <- address
                 match maybeAmount with
@@ -206,14 +191,13 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                             |> FrontendHelpers.DoubleCheckCompletionNonGeneric
                 task |> FrontendHelpers.DoubleCheckCompletionNonGeneric
             )
-        )
+        
+        let scanPage = FrontendHelpers.GetBarcodeScannerPage onScan
+
         // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
         //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
         this.Navigation.PushModalAsync scanPage
             |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-#else
-        ()
-#endif
 
     member this.OnAllBalanceButtonClicked(_sender: Object, _args: EventArgs): unit =
         match cachedBalanceAtPageCreation with
@@ -875,7 +859,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                 transactionEntry.Text <- String.Empty
                 transactionEntry.IsVisible <- true
                 transactionScanQrCodeButton.IsEnabled <- true
-                if Device.RuntimePlatform = Device.Android || Device.RuntimePlatform = Device.iOS then
+                if canScanBarcode then
                     transactionScanQrCodeButton.IsVisible <- true
                 destinationScanQrCodeButton.IsVisible <- false
                 allBalanceButton.IsVisible <- false
