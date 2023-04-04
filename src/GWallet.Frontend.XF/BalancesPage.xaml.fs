@@ -268,14 +268,14 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
             balances |> Seq.iteri (fun i balanceState ->
                 let balanceSet = balanceState.BalanceSet
                 let tapGestureRecognizer = TapGestureRecognizer()
-#if XAMARIN                
+               
                 tapGestureRecognizer.Tapped.Subscribe(fun _ ->
                     let receivePage () =
                         ReceivePage(balanceSet.Account, balanceState.UsdRate, this, balanceSet.Widgets)
                             :> Page
                     FrontendHelpers.SwitchToNewPage this receivePage true
                 ) |> ignore
-#endif                
+                
                 let frame = balanceSet.Widgets.Frame
                 frame.GestureRecognizers.Add tapGestureRecognizer
                 contentLayout.Children.Add frame

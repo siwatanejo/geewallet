@@ -135,6 +135,8 @@
   <ItemGroup>
 	<EmbeddedResource Include="PairingFromPage.xaml" />
 	<EmbeddedResource Include="PairingToPage.xaml" />
+	<EmbeddedResource Include="SendPage.xaml" />
+	<EmbeddedResource Include="ReceivePage.xaml" />
     <EmbeddedResource Include="BalancesPage.xaml" />
     <EmbeddedResource Include="LoadingPage.xaml" />
     <EmbeddedResource Include="WelcomePage.xaml" />
@@ -146,7 +148,13 @@
 	  <DependentUpon>PairingFromPage.xaml</DependentUpon>
 	</Compile>
 	<Compile Include="..\GWallet.Frontend.XF\PairingToPage.xaml.fs">
-	 <DependentUpon>PairingToPage.xaml</DependentUpon>
+	  <DependentUpon>PairingToPage.xaml</DependentUpon>
+	</Compile>
+	<Compile Include="..\GWallet.Frontend.XF\SendPage.xaml.fs">
+	  <DependentUpon>SendPage.xaml</DependentUpon>
+	</Compile>
+	<Compile Include="..\GWallet.Frontend.XF\ReceivePage.xaml.fs">
+	  <DependentUpon>ReceivePage.xaml</DependentUpon>
 	</Compile>
 	<Compile Include="..\GWallet.Frontend.XF\BalancesPage.xaml.fs">
       <DependentUpon>BalancesPage.xaml</DependentUpon>
