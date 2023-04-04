@@ -15,6 +15,9 @@ open Microsoft.Maui.Controls.Hosting
 open Microsoft.Maui.Handlers
 open Microsoft.Maui.Hosting
 
+open ZXing.Net.Maui.Controls
+
+
 type MauiProgram =
     static member CreateMauiApp() =
 #if GTK
@@ -42,6 +45,7 @@ type MauiProgram =
         MauiApp
             .CreateBuilder()
             .UseMauiApp<App>()
+            .UseBarcodeReader()
 #if GTK 
             .UseMauiCompatibility()
 #endif
