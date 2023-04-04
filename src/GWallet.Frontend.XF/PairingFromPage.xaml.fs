@@ -52,6 +52,8 @@ type PairingFromPage(previousPage: Page,
             failwith "Couldn't find QR code"
 #if XAMARIN 
         qrCode.BarcodeValue <- qrCodeContents
+        qrCode.BarcodeFormat <- BarcodeFormat.QR_CODE
+        qrCode.BarcodeOptions <- ZXing.Common.EncodingOptions(Width = 400, Height = 400)
 #else
         qrCode.Value <- qrCodeContents
         qrCode.Format <- BarcodeFormat.QrCode
