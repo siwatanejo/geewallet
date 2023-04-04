@@ -61,34 +61,15 @@ type PairingToPage(balancesPage: Page,
 
     member this.OnScanQrCodeButtonClicked(_sender: Object, _args: EventArgs): unit =
         let scanPage = 
-#if XAMARIN
-            let scanPage = ZXingScannerPage FrontendHelpers.BarCodeScanningOptions
-            scanPage.add_OnScanResult(fun result ->
-                scanPage.IsScanning <- false
+            FrontendHelpers.GetBarcodeScannerPage 
+                (fun barcodeString ->
+                    MainThread.BeginInvokeOnMainThread(fun _ ->
+                        // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
+                        //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
+                        let task = this.Navigation.PopModalAsync()
+                        coldAddressesEntry.Text <- barcodeString
+                        task |> FrontendHelpers.DoubleCheckCompletionNonGeneric) )
 
-                MainThread.BeginInvokeOnMainThread(fun _ ->
-                    // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
-                    //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                    let task = this.Navigation.PopModalAsync()
-                    coldAddressesEntry.Text <- result.Text
-                    task |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-                )
-            )
-            scanPage
-#else
-            let scanView = ZXing.Net.Maui.Controls.CameraBarcodeReaderView(Options = FrontendHelpers.BarCodeScanningOptions)
-            scanView.BarcodesDetected.Add(fun result ->
-                MainThread.BeginInvokeOnMainThread(fun _ ->
-                    // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
-                    //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                    let task = this.Navigation.PopModalAsync()
-                    let barCodeText = result.Results.[0].Value // assume our barcode is first result?
-                    coldAddressesEntry.Text <- barCodeText
-                    task |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-                )
-            )
-            ContentPage(Content = scanView)
-#endif
         MainThread.BeginInvokeOnMainThread(fun _ ->
             // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
             //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)

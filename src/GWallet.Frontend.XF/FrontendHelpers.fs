@@ -23,6 +23,7 @@ open Xamarin.Forms
 open Xamarin.Essentials
 open ZXing
 open ZXing.Mobile
+open ZXing.Net.Mobile.Forms
 #endif
 open Fsdk
 open GWallet.Backend
@@ -461,6 +462,22 @@ module FrontendHelpers =
         BarcodeReaderOptions(TryHarder = true, Formats = BarcodeFormat.QrCode)
 #endif
                                      
+    let GetBarcodeScannerPage (onBarcodeDetected: string -> unit) =
+#if XAMARIN
+        let scanPage = ZXingScannerPage BarCodeScanningOptions
+        scanPage.add_OnScanResult(fun result ->
+            scanPage.IsScanning <- false
+            onBarcodeDetected result.Text
+        )
+        scanPage
+#else
+        let scanView = ZXing.Net.Maui.Controls.CameraBarcodeReaderView(Options = BarCodeScanningOptions)
+        scanView.BarcodesDetected.Add(fun result ->
+            let barCodeText = result.Results.[0].Value // assume our barcode is first result?
+            onBarcodeDetected barCodeText
+        )
+        ContentPage(Content = scanView)
+#endif
 
     let GetImageSource name =
         let thisAssembly = typeof<BalanceState>.Assembly
