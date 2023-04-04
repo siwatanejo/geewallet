@@ -240,6 +240,8 @@ let CopyXamlFiles() =
             "BalancesPage.xaml"
             "PairingFromPage.xaml"
             "PairingToPage.xaml" 
+            "ReceivePage.xaml"
+            "SendPage.xaml"
         |]
     for file in files do
         let sourcePath = Path.Combine("src", "GWallet.Frontend.XF", file)
