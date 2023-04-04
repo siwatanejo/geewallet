@@ -25,19 +25,12 @@
                 Clicked="OnCopyToClipboardClicked"/>
         <zx:ZXingBarcodeImageView
             x:Name="qrCode"
-            BarcodeFormat="QR_CODE"
             HorizontalOptions="Center"
             VerticalOptions="Center"
             IsVisible="false"
             WidthRequest="200"
             HeightRequest="200"
             >
-            <zx:ZXingBarcodeImageView.BarcodeOptions>
-                <zxcm:EncodingOptions
-                    Width="200"
-                    Height="200"
-                    />
-            </zx:ZXingBarcodeImageView.BarcodeOptions>
         </zx:ZXingBarcodeImageView>
         <Button
             x:Name="viewTransactionHistoryButton"
