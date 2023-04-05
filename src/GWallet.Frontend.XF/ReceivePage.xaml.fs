@@ -9,6 +9,7 @@ open System
 #if !XAMARIN
 open Microsoft.Maui.Controls
 open Microsoft.Maui.Controls.Xaml
+open Microsoft.Maui.ApplicationModel
 open Microsoft.Maui.ApplicationModel.DataTransfer
 open Microsoft.Maui.Networking
 
@@ -122,7 +123,7 @@ type ReceivePage(account: IAccount,
 
     member __.OnViewTransactionHistoryClicked(_sender: Object, _args: EventArgs) =
         BlockExplorer.GetTransactionHistory account
-            |> Xamarin.Essentials.Launcher.OpenAsync
+            |> Launcher.OpenAsync
             |> FrontendHelpers.DoubleCheckCompletionNonGeneric
 
     member this.OnSendPaymentClicked(_sender: Object, _args: EventArgs) =
