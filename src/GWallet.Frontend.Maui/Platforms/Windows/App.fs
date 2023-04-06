@@ -6,13 +6,21 @@ namespace GWallet.Frontend.Maui.WinUI
 open Microsoft.UI.Xaml
 open Microsoft.Maui
 open Microsoft.Maui.Controls.Xaml
+open System
 
 /// <summary>
 /// Provides application-specific behavior to supplement the default Application class.
 /// </summary>
-type App() =
-    inherit MauiWinUIApplication()
 
-    do this.LoadFromXaml(typeof<App>) |> ignore
+type App() =
+    inherit FSharp.Maui.WinUICompat.App()
     
-    override this.CreateMauiApp() = MauiProgram.CreateMauiApp()
+    override this.CreateMauiApp() = GWallet.Frontend.Maui.MauiProgram.CreateMauiApp()
+
+
+module Program =
+    [<EntryPoint>]
+    [<STAThread>]
+    let main args =
+        do FSharp.Maui.WinUICompat.Program.Main(args, typeof<App>)
+        0

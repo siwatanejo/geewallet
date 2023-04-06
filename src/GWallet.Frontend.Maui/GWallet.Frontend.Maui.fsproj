@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>net6.0-android;net6.0-ios;net6.0-maccatalyst</TargetFrameworks>
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net6.0-windows10.0.19041.0</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net7.0-windows10.0.19041.0</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('linux'))">net6.0-gtk</TargetFrameworks>
     <!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
     <!-- <TargetFrameworks>$(TargetFrameworks);net6.0-tizen</TargetFrameworks> -->
@@ -201,6 +201,10 @@
   <ItemGroup>
     <PackageReference Include="FSharp.Core" Version="6.0.3" />
   </ItemGroup>
+
+  <ItemGroup Condition="$(TargetPlatformIdentifier) == 'windows'">
+    <PackageReference Include="FSharp.Maui.WinUICompat" Version="1.0.0" />
+  </ItemGroup>
   
   <ItemGroup Condition="$(TargetPlatformIdentifier) != 'gtk'">
     <PackageReference Include="ZXing.Net.Maui" Version="0.2.0-preview.2" />
@@ -244,14 +248,14 @@
   <ItemGroup Condition="$(TargetPlatformIdentifier) == 'windows'">
     <Manifest Include="$(WindowsProjectFolder)app.manifest" />
     <AppxManifest Include="$(WindowsProjectFolder)Package.appxmanifest" />
-    <ApplicationDefinition Include="$(WindowsProjectFolder)App.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <XamlRuntime>$(DefaultXamlRuntime)</XamlRuntime>
-    </ApplicationDefinition>
-    <Compile Include="$(WindowsProjectFolder)App.xaml.fs">
-      <DependentUpon>$(WindowsProjectFolder)App.xaml</DependentUpon>
-    </Compile>
+	<Compile Include="$(WindowsProjectFolder)App.fs" />
   </ItemGroup>
+
+  <PropertyGroup Condition=" '$([MSBuild]::GetTargetPlatformIdentifier($(TargetFramework)))' == 'windows' ">
+    <DefineConstants>DISABLE_XAML_GENERATED_MAIN;$(DefineConstants)</DefineConstants>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+  </PropertyGroup>
+  <Target Name="XamlPreCompile"></Target>
 
   <ItemGroup Condition="$(TargetPlatformIdentifier) == 'tizen'">
     <TizenManifestFile Include="$(TizenProjectFolder)tizen-manifest.xml" />
