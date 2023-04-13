@@ -62,7 +62,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
     let lockObject = Object()
     let mutable transaction = NotAvailableBecauseOfHotMode
 
-    let mainLayout = base.FindByName<StackLayout>("mainLayout")
+    let mainLayout = base.FindByName<Grid>("mainLayout")
     let destinationScanQrCodeButton = mainLayout.FindByName<Button> "destinationScanQrCodeButton"
     let transactionScanQrCodeButton = mainLayout.FindByName<Button> "transactionScanQrCodeButton"
     let currencySelectorPicker = mainLayout.FindByName<Picker>("currencySelector")
@@ -134,7 +134,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
             )
 
     member this.OnTransactionScanQrCodeButtonClicked(_sender: Object, _args: EventArgs): unit =
-        let mainLayout = base.FindByName<StackLayout> "mainLayout"
+        let mainLayout = base.FindByName<Grid> "mainLayout"
         let transactionEntry = mainLayout.FindByName<Entry> "transactionEntry"
         let scanPage = 
                     FrontendHelpers.GetBarcodeScannerPage 
@@ -154,7 +154,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
         )
 
     member this.OnScanQrCodeButtonClicked(_sender: Object, _args: EventArgs): unit =     
-        let mainLayout = base.FindByName<StackLayout>("mainLayout")
+        let mainLayout = base.FindByName<Grid>("mainLayout")
 
         let onScan barcodeText =
             if String.IsNullOrEmpty barcodeText then
@@ -405,7 +405,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                 String.IsNullOrEmpty passwordEntry.Text
 
     member this.OnTransactionEntryTextChanged (_sender: Object, _args: EventArgs): unit =
-        let mainLayout = base.FindByName<StackLayout> "mainLayout"
+        let mainLayout = base.FindByName<Grid> "mainLayout"
         let transactionEntry = mainLayout.FindByName<Entry> "transactionEntry"
         let transactionEntryText = transactionEntry.Text
         if not (String.IsNullOrWhiteSpace transactionEntryText) then
@@ -551,7 +551,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                 }
 
     member this.OnEntryTextChanged(_sender: Object, _args: EventArgs) =
-        let mainLayout = base.FindByName<StackLayout>("mainLayout")
+        let mainLayout = base.FindByName<Grid>("mainLayout")
         if (mainLayout = null) then
             //page not yet ready
             ()
@@ -763,7 +763,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
         } |> FrontendHelpers.DoubleCheckCompletionAsync false
 
     member this.OnSendOrSignButtonClicked(_sender: Object, _args: EventArgs): unit =
-        let mainLayout = base.FindByName<StackLayout>("mainLayout")
+        let mainLayout = base.FindByName<Grid>("mainLayout")
         let amountToSend = mainLayout.FindByName<Entry>("amountToSend")
         let destinationAddress = destinationAddressEntry.Text
 
