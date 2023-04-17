@@ -181,6 +181,13 @@ type CircleChartView () =
                 Aspect = Aspect.AspectFit,
                 Source = imageSource
             )
+            
+#if !XAMARIN && GTK
+        // TODO: We should revert this when Image.Aspect is fixed for Maui/Gtk
+        let size = min self.Width self.Height
+        image.WidthRequest <- size
+        image.HeightRequest <- size
+#endif
         self.Content <- image
 
     member self.Draw () =
