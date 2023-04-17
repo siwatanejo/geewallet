@@ -6,7 +6,7 @@
           Padding="10,10,10,10"
           VerticalOptions="Center"
           HorizontalOptions="FillAndExpand"
-          RowDefinitions="*,*,*,*,*,*,*,*,*,*">
+          RowDefinitions="*,*,*,Auto,*,Auto,*,Auto,Auto">
         <StackLayout x:Name="transactionLayout"
                      Orientation="Horizontal"
                      HorizontalOptions="FillAndExpand"
@@ -125,26 +125,28 @@
                    TextChanged="OnEntryTextChanged" />
 
         </Grid>
-
-        <Label Text="Password:"
-               x:Name="passwordLabel"
-               Grid.Row="6"/>
-        <Entry x:Name="passwordEntry"
-               IsPassword="true"
-               TextChanged="OnEntryTextChanged"
-               Grid.Row="7"/>
+        <Grid RowDefinitions="*,Auto"
+            Grid.Row="6">
+            <Label Text="Password:"
+                   x:Name="passwordLabel"
+                   Grid.Row="0"/>
+            <Entry x:Name="passwordEntry"
+                   IsPassword="true"
+                   TextChanged="OnEntryTextChanged"
+                   Grid.Row="1"/>
+        </Grid>
 
         <Button x:Name="sendOrSignButton"
                 Text="..."
                 IsEnabled="false"
                 HorizontalOptions="Center"
                 Clicked="OnSendOrSignButtonClicked"
-                Grid.Row="8"/>
+                Grid.Row="7"/>
         <Button x:Name="cancelButton"
                 Text="Cancel"
                 IsEnabled="true"
                 HorizontalOptions="Center"
                 Clicked="OnCancelButtonClicked"
-                Grid.Row="9"/>
+                Grid.Row="8"/>
     </Grid>
 </ContentPage>
