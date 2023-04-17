@@ -150,7 +150,7 @@ jobs:
         rm gtksharp.net.sdk.gtk.manifest-6.0.300.nupkg
         chmod 764 $WORKLOAD_MANIFEST_DIR/*
         dotnet workload search
-        dotnet workload install gtk
+        dotnet workload install gtk --skip-manifest-update
     - name: Add Maui Nuget source
       run: |
         cd dependencies/maui
