@@ -15,7 +15,7 @@ type App() as this =
         let window = base.CreateWindow(activationState)
         window.Created.Add(fun _ -> 
             let gtkWindow = MauiGtkApplication.Current.MainWindow
-            gtkWindow.Resize(374,1000)
+            gtkWindow.Resize(500,1000)
         )
         window
 #endif
