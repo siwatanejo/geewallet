@@ -74,7 +74,8 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
     let PreLoadCurrencyImages(): Map<Currency*bool,Image> =
         GetAllImages() |> Map.ofSeq
 
-    let logoImageSource = FrontendHelpers.GetSizedImageSource "logo" 512
+    let logoImageSizeInPixels= 512
+    let logoImageSource = FrontendHelpers.GetSizedImageSource "logo" logoImageSizeInPixels
     let logoImg = Image(Source = logoImageSource, IsVisible = true)
 
     let mutable keepAnimationTimerActive = true
@@ -132,7 +133,6 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
             let! allResolvedNormalAccountBalances,allResolvedReadOnlyBalances = bothJobs
 
             keepAnimationTimerActive <- false
-
             let balancesPage () =
                 BalancesPage(state, allResolvedNormalAccountBalances, allResolvedReadOnlyBalances,
                              currencyImages, false)
@@ -146,6 +146,10 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
     member this.Init (): unit =
         if showLogoFirst then
             MainThread.BeginInvokeOnMainThread(fun _ ->
+#if !XAMARIN && GTK
+                logoImg.WidthRequest <- float(logoImageSizeInPixels) / 2.0
+                logoImg.HeightRequest <- float(logoImageSizeInPixels) / 2.0
+#endif
                 mainLayout.Children.Add logoImg
             )
 
