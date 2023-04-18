@@ -478,6 +478,14 @@ module FrontendHelpers =
         )
         ContentPage(Content = scanView)
 #endif
+    
+    /// Safer alternative to Navigation.PopModalAsync(): when ModalStack is empty, do nothing.
+    /// This is used in barcode scanner calbacks because sometimes those would be called more than one time.
+    let TryPopModalAsync (page: Page) : Task<Page> =
+        if page.Navigation.ModalStack.Count > 0 then
+            page.Navigation.PopModalAsync()
+        else
+            Task.FromResult page
 
     let GetImageSource name =
         let thisAssembly = typeof<BalanceState>.Assembly

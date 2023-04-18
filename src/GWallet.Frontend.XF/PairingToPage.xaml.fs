@@ -66,8 +66,8 @@ type PairingToPage(balancesPage: Page,
                     MainThread.BeginInvokeOnMainThread(fun _ ->
                         // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
                         //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                        let task = this.Navigation.PopModalAsync()
                         coldAddressesEntry.Text <- barcodeString
+                        let task = FrontendHelpers.TryPopModalAsync this
                         task |> FrontendHelpers.DoubleCheckCompletionNonGeneric) )
 
         MainThread.BeginInvokeOnMainThread(fun _ ->

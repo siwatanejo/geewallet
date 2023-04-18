@@ -142,7 +142,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                             MainThread.BeginInvokeOnMainThread(fun _ ->
                                 // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
                                 //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                                let task = this.Navigation.PopModalAsync()
+                                let task = FrontendHelpers.TryPopModalAsync this
                                 transactionEntry.Text <- barcodeString
                                 task |> FrontendHelpers.DoubleCheckCompletionNonGeneric) )
 
@@ -163,7 +163,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
             MainThread.BeginInvokeOnMainThread(fun _ ->
                 // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
                 //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                let task = this.Navigation.PopModalAsync()
+                let task = FrontendHelpers.TryPopModalAsync this
 
                 let address,maybeAmount =
                     match account.Currency with
