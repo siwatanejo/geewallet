@@ -169,7 +169,11 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                     match account.Currency with
                     | Currency.BTC
                     | Currency.LTC ->
-                        UtxoCoin.Account.ParseAddressOrUrl barcodeText account.Currency
+                        try
+                            UtxoCoin.Account.ParseAddressOrUrl barcodeText account.Currency
+                        with
+                        | _exn ->
+                            "<Error parsing address>", None
                     | _ -> barcodeText,None
 
                 destinationAddressEntry.Text <- address
@@ -413,7 +417,7 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
                 try
                     Account.ImportTransactionFromJson transactionEntryText |> Some
                 with
-                | :? DeserializationException as _dex ->
+                | ex when (ex :? Newtonsoft.Json.JsonReaderException || ex :? DeserializationException) ->
                     MainThread.BeginInvokeOnMainThread(fun _ ->
                         transactionEntry.TextColor <- Color.Red
                         let errMsg = "Transaction corrupt or invalid"
