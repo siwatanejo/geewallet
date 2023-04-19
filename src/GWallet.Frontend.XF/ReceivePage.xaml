@@ -28,7 +28,7 @@
                 HorizontalOptions="Center"
                 Clicked="OnCopyToClipboardClicked"
                 Grid.Row="3"/>
-        <zx:BarcodeGeneratorView
+        <zx:ZXingBarcodeImageView
             x:Name="qrCode"
             HorizontalOptions="Center"
             VerticalOptions="Center"
@@ -37,7 +37,7 @@
             HeightRequest="200"
             Grid.Row="4"
         >
-        </zx:BarcodeGeneratorView>
+        </zx:ZXingBarcodeImageView>
         <Button
             x:Name="viewTransactionHistoryButton"
             Text="View transaction history..."
