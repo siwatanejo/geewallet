@@ -4,7 +4,7 @@
              xmlns:local="clr-namespace:GWallet.Frontend.XF"
              x:Class="GWallet.Frontend.XF.LoadingPage">
     <Grid 
-           RowDefinitions="*,*,*"
+           RowDefinitions="*,Auto,*"
            x:Name="mainLayout"
                  Padding="20,150,20,50"
                  VerticalOptions="Start">
