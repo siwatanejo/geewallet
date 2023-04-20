@@ -104,7 +104,8 @@
             </Button>
         </Grid>
 
-        <Grid HorizontalOptions="FillAndExpand"
+        <Grid x:Name="amountToSendLayout"
+              HorizontalOptions="FillAndExpand"
               Grid.Row="5">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>

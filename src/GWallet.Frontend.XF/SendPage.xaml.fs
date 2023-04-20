@@ -119,6 +119,10 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
 
                 (this:>FrontendHelpers.IAugmentablePayPage).AddTransactionScanner()
             this.AdjustWidgetsStateAccordingToConnectivity()
+#if XAMARIN
+        let amountToSendLayout = mainLayout.FindByName<Grid> "amountToSendLayout"
+        amountToSendLayout.ColumnDefinitions.[0] <- ColumnDefinition()
+#endif
 
     [<Obsolete(DummyPageConstructorHelper.Warning)>]
     new() = SendPage(ReadOnlyAccount(Currency.BTC, { Name = "dummy"; Content = fun _ -> "" }, fun _ -> ""),
