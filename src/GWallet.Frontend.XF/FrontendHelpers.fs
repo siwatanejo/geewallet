@@ -374,6 +374,9 @@ module FrontendHelpers =
 
         let outerLayout =
 #if XAMARIN
+            // because of layout changes in the currency list colorBoxWidth for XF needs to be larger 
+            // for color box to be visible
+            let colorBoxWidth = colorBoxWidth * 2.0
             let stackLayout = StackLayout(Orientation = StackOrientation.Horizontal,
                                           Padding = Thickness(20., 20., colorBoxWidth + 10., 20.))
 
