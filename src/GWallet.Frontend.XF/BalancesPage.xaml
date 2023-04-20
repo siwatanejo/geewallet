@@ -72,6 +72,7 @@
                VerticalOptions="End"
                HorizontalOptions="Center"
                BorderColor="Transparent"
+               BackgroundColor="Transparent"
                Margin="0,10,0,10">
             <Label Text="www.geewallet.com" x:Name="footerLabel" />
         </Frame> 
