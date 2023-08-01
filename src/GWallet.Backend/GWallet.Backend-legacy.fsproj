@@ -142,8 +142,8 @@
       <HintPath>..\..\packages\System.Security.Cryptography.X509Certificates.4.3.0\lib\net46\System.Security.Cryptography.X509Certificates.dll</HintPath>
     </Reference>
     <Reference Include="System.Net.Http" />
-    <Reference Include="NBitcoin.Altcoins">
-      <HintPath>..\..\packages\NBitcoin.Altcoins.3.0.8\lib\net452\NBitcoin.Altcoins.dll</HintPath>
+    <Reference Include="NLitecoin">
+      <HintPath>..\..\packages\NLitecoin.0.1.0--date20230801-0900.git-eb270a6\lib\netstandard2.0\NLitecoin.dll</HintPath>
     </Reference>
     <Reference Include="NBitcoin">
       <HintPath>..\..\packages\NBitcoin.6.0.17\lib\net461\NBitcoin.dll</HintPath>
