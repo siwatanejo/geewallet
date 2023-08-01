@@ -62,7 +62,7 @@
     <PackageReference Include="Nethereum" Version="0.95.0--date20210125-0551.git-05a29e9">
       <GeneratePathProperty></GeneratePathProperty>
     </PackageReference>
-    <PackageReference Include="NLitecoin" Version="0.1.0--date20230801-0900.git-eb270a6" />
+    <PackageReference Include="NLitecoin" Version="0.1.0--date20230801-0949.git-3b4d792" />
     <PackageReference Include="SharpRaven" Version="2.4.0">
       <GeneratePathProperty></GeneratePathProperty>
     </PackageReference>
