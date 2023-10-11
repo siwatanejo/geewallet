@@ -11,6 +11,7 @@ type Currency =
     // <NOTE if adding a new cryptocurrency below, remember to add it too to GetAll() and ToString()
     | BTC
     | LTC
+    | LTCMW
     | ETH
     | ETC
     | DAI
@@ -30,6 +31,7 @@ type Currency =
         seq {
             yield BTC
             yield LTC
+            yield LTCMW
             yield ETH
             yield ETC
             yield DAI
@@ -50,7 +52,7 @@ type Currency =
         self = Currency.BTC || self = Currency.LTC
 
     member self.DecimalPlaces(): int =
-        if self.IsUtxo() then
+        if self.IsUtxo() || self = Currency.LTCMW then
             8
         elif self.IsEther() then
             18
@@ -68,6 +70,7 @@ type Currency =
         match self with
         | BTC -> "BTC"
         | LTC -> "LTC"
+        | LTCMW -> "LTCMW"
         | ETH -> "ETH"
         | ETC -> "ETC"
         | SAI -> "SAI"
