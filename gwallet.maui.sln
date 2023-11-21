@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31611.283
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "GWallet.Backend.NetStandard", "src\GWallet.Backend.NetStandard\GWallet.Backend.NetStandard.fsproj", "{AEE8C358-E147-4976-A439-7391F8EA8ACD}"
-EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "GWallet.Frontend.Maui", "src\GWallet.Frontend.Maui\GWallet.Frontend.Maui.fsproj", "{D6C1C0C8-FD57-476F-8A60-BA99D8346045}"
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "GWallet.Backend", "src\GWallet.Backend\GWallet.Backend.fsproj", "{DA2EFDCB-1A3B-4057-ADAE-3831DCFA4056}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,16 +13,16 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{AEE8C358-E147-4976-A439-7391F8EA8ACD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{AEE8C358-E147-4976-A439-7391F8EA8ACD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{AEE8C358-E147-4976-A439-7391F8EA8ACD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{AEE8C358-E147-4976-A439-7391F8EA8ACD}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D6C1C0C8-FD57-476F-8A60-BA99D8346045}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D6C1C0C8-FD57-476F-8A60-BA99D8346045}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D6C1C0C8-FD57-476F-8A60-BA99D8346045}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
 		{D6C1C0C8-FD57-476F-8A60-BA99D8346045}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D6C1C0C8-FD57-476F-8A60-BA99D8346045}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D6C1C0C8-FD57-476F-8A60-BA99D8346045}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{DA2EFDCB-1A3B-4057-ADAE-3831DCFA4056}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA2EFDCB-1A3B-4057-ADAE-3831DCFA4056}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA2EFDCB-1A3B-4057-ADAE-3831DCFA4056}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA2EFDCB-1A3B-4057-ADAE-3831DCFA4056}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
