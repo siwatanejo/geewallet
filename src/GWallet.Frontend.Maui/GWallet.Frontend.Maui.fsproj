@@ -2,11 +2,11 @@
 
   <PropertyGroup>
     <!-- NOTE: when making changes to the lines below, maybe remove CheckEolWorkloads tag too -->
-    <TargetFrameworks>net6.0-android;net6.0-ios;net6.0-maccatalyst</TargetFrameworks>
-    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net6.0-windows10.0.19041.0</TargetFrameworks>
+    <TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('linux'))">net6.0-gtk</TargetFrameworks>
     <!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-    <!-- <TargetFrameworks>$(TargetFrameworks);net6.0-tizen</TargetFrameworks> -->
+    <!-- <TargetFrameworks>$(TargetFrameworks);net8.0-tizen</TargetFrameworks> -->
 
 
     <OutputType>Exe</OutputType>
@@ -37,9 +37,14 @@
     <SupportedOSPlatformVersion Condition="$(TargetPlatformIdentifier) == 'tizen'">6.5</SupportedOSPlatformVersion>
 
     <!-- .NET 6 workloads are out of support, but are still used in this project -->
-    <CheckEolWorkloads>false</CheckEolWorkloads>
+    <CheckEolWorkloads Condition="$([MSBuild]::IsOSPlatform('linux'))">false</CheckEolWorkloads>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.7" />
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.7" />
+  </ItemGroup>
+    
   <!-- workaround for https://github.com/xamarin/xamarin-android/issues/6101 -->
     <PropertyGroup>
       <GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
