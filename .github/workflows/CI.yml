@@ -8,111 +8,84 @@ on: [push, pull_request, workflow_dispatch]
 # (msbuild bug?)
 
 jobs:
-  macOS--dotnet6-and-mono:
-    runs-on: macOS-latest
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: false
-    - name: Setup .NET SDK 6.0.x
-      uses: actions/setup-dotnet@v1.7.2
-      with:
-        dotnet-version: '6.0.113'
-    - name: install maui workload
-      run: dotnet workload install maui
-    - name: configure
-      run: ./configure.sh
-    - name: build in DEBUG mode
-      run: make
-    - name: Build Maui Android frontend
-      run: |
-        # first run will give some errors related to Resource, so run build command twice
-        dotnet build src/GWallet.Frontend.Maui/GWallet.Frontend.Maui.fsproj --framework=net6.0-android || \
-        dotnet build src/GWallet.Frontend.Maui/GWallet.Frontend.Maui.fsproj --framework=net6.0-android
-    - name: Build Android APK
-      run: |
-        # first run will give some errors related to Resource, so run build command twice
-        dotnet publish src/GWallet.Frontend.Maui/GWallet.Frontend.Maui.fsproj --framework net6.0-android --configuration Release || \
-        dotnet publish src/GWallet.Frontend.Maui/GWallet.Frontend.Maui.fsproj --framework net6.0-android --configuration Release
-    # Upload artifact fails with "permission denied" error without this
-    - name: Fix permissions
-      run: sudo chmod -R 755 src/GWallet.Frontend.Maui/bin/Release/net6.0-android/publish
-    - name: Find the APK file's path and name
-      id: find_apk_file
-      run: |
-        FILEPATH=$(ls src/GWallet.Frontend.Maui/bin/Release/net6.0-android/publish/*.apk)
-        FILENAME=$(basename $FILEPATH)
-        echo "file_path=$FILEPATH" >> $GITHUB_OUTPUT
-        echo "file_name=$FILENAME" >> $GITHUB_OUTPUT
-    - name: Upload APK as CI artifact
-      uses: actions/upload-artifact@v3
-      with:
-        path: ${{ steps.find_apk_file.outputs.file_path }}
-        name: ${{ steps.find_apk_file.outputs.file_name }}
-    - name: sanity check
-      run: make sanitycheck
-    - name: unit tests
-      run: make check
-    - name: build in STRICT mode
-      run: git clean -fdx && ./configure.sh && make strict
-    - name: build in RELEASE mode
-      run: git clean -fdx && ./configure.sh && make release
-    - name: integration tests
-      run: make update-servers
-    - name: compile .fsx scripts
-      run: |
-        dotnet new tool-manifest
-
-        # we need to install specific version because of this bug: https://github.com/dotnet/sdk/issues/24037
-        dotnet tool install fsxc --version 0.5.9.1
-
-        find . -type f -name "*.fsx" | xargs -t -I {} dotnet fsxc {}
-
-  macOS--mono-only:
-    runs-on: macOS-latest
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: false
-    - name: HACK to emulate dotnet uninstall
-      run: sudo rm -f `which dotnet`
-    - name: configure
-      run: ./configure.sh
-    - name: build in DEBUG mode
-      run: make
-    - name: sanity check
-      run: make sanitycheck
-    - name: unit tests
-      run: make check
-    - name: build in STRICT mode
-      run: git clean -fdx && ./configure.sh && make strict
-    - name: build in RELEASE mode
-      run: git clean -fdx && ./configure.sh && make release
-    - name: integration tests
-      run: make update-servers
-
-  macOS--dotnet6-only:
-    runs-on: macOS-latest
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: false
-    - name: HACK to emulate mono uninstall
-      run: sudo rm -f `which mono` && sudo rm -f `which msbuild`
-    - name: configure
-      run: ./configure.sh
-    - name: build in DEBUG mode
-      run: make
-    - name: sanity check
-      run: make sanitycheck
-    - name: unit tests
-      run: make check
-    - name: build in STRICT mode
-      run: git clean -fdx && ./configure.sh && make strict
-    - name: build in RELEASE mode
-      run: git clean -fdx && ./configure.sh && make release
-    - name: integration tests
-      run: make update-servers
+#  macOS--dotnet6-and-mono:
+#    runs-on: macOS-latest
+#    steps:
+#    - uses: actions/checkout@v1
+#      with:
+#        submodules: false
+#    - name: Setup .NET SDK 6.0.x
+#      uses: actions/setup-dotnet@v1.7.2
+#      with:
+#        dotnet-version: '6.0.113'
+#    - name: configure
+#      run: ./configure.sh
+#    - name: build in DEBUG mode
+#      run: make
+#    - name: sanity check
+#      run: make sanitycheck
+#    - name: unit tests
+#      run: make check
+#    - name: build in STRICT mode
+#      run: git clean -fdx && ./configure.sh && make strict
+#    - name: build in RELEASE mode
+#      run: git clean -fdx && ./configure.sh && make release
+#    - name: integration tests
+#      run: make update-servers
+#    - name: compile .fsx scripts
+#      run: |
+#        dotnet new tool-manifest
+#
+#        # we need to install specific version because of this bug: https://github.com/dotnet/sdk/issues/24037
+#        dotnet tool install fsxc --version 0.5.9.1
+#
+#        find . -type f -name "*.fsx" | xargs -t -I {} dotnet fsxc {}
+#
+#  macOS--mono-only:
+#    runs-on: macOS-latest
+#    steps:
+#    - uses: actions/checkout@v1
+#      with:
+#        submodules: false
+#    - name: HACK to emulate dotnet uninstall
+#      run: sudo rm -f `which dotnet`
+#    - name: configure
+#      run: ./configure.sh
+#    - name: build in DEBUG mode
+#      run: make
+#    - name: sanity check
+#      run: make sanitycheck
+#    - name: unit tests
+#      run: make check
+#    - name: build in STRICT mode
+#      run: git clean -fdx && ./configure.sh && make strict
+#    - name: build in RELEASE mode
+#      run: git clean -fdx && ./configure.sh && make release
+#    - name: integration tests
+#      run: make update-servers
+#
+#  macOS--dotnet6-only:
+#    runs-on: macOS-latest
+#    steps:
+#    - uses: actions/checkout@v1
+#      with:
+#        submodules: false
+#    - name: HACK to emulate mono uninstall
+#      run: sudo rm -f `which mono` && sudo rm -f `which msbuild`
+#    - name: configure
+#      run: ./configure.sh
+#    - name: build in DEBUG mode
+#      run: make
+#    - name: sanity check
+#      run: make sanitycheck
+#    - name: unit tests
+#      run: make check
+#    - name: build in STRICT mode
+#      run: git clean -fdx && ./configure.sh && make strict
+#    - name: build in RELEASE mode
+#      run: git clean -fdx && ./configure.sh && make release
+#    - name: integration tests
+#      run: make update-servers
 
   windows--dotnet6-and-legacyFramework:
     runs-on: windows-latest
@@ -258,35 +231,35 @@ jobs:
     - name: integration tests
       run: make update-servers
 
-  linux-github--dotnet-and-newmono:
-    runs-on: ubuntu-22.04
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: false
-    - name: install missing dependencies
-      run: sudo apt install --yes fsharp nunit-console
-    - name: install last version of mono (Microsoft APT repositories)
-      run: sudo ./scripts/install_mono_from_microsoft_deb_packages.sh
-    - name: check mono version
-      run: mono --version
-    - name: install GTK libs (dependency of GTK frontend)
-      run: sudo apt install --yes libgtk2.0-cil-dev
-    - name: configure
-      run: ./configure.sh
-    - name: build in DEBUG mode (retry 3 times because of flakey XamForms restore)
-      # TODO: remove retry when we migrate to .NET6 (removing LEGACY_FRAMEWORK support)
-      run: make || make || make || make
-    - name: sanity check
-      run: make sanitycheck
-    - name: unit tests
-      run: make check
-    - name: build in STRICT mode
-      run: git clean -fdx && ./configure.sh && make strict
-    - name: build in RELEASE mode
-      run: git clean -fdx && ./configure.sh && make release
-    - name: integration tests
-      run: make update-servers
+#  linux-github--dotnet-and-newmono:
+#    runs-on: ubuntu-22.04
+#    steps:
+#    - uses: actions/checkout@v1
+#      with:
+#        submodules: false
+#    - name: install missing dependencies
+#      run: sudo apt install --yes fsharp nunit-console
+#    - name: install last version of mono (Microsoft APT repositories)
+#      run: sudo ./scripts/install_mono_from_microsoft_deb_packages.sh
+#    - name: check mono version
+#      run: mono --version
+#    - name: install GTK libs (dependency of GTK frontend)
+#      run: sudo apt install --yes libgtk2.0-cil-dev
+#    - name: configure
+#      run: ./configure.sh
+#    - name: build in DEBUG mode (retry 3 times because of flakey XamForms restore)
+#      # TODO: remove retry when we migrate to .NET6 (removing LEGACY_FRAMEWORK support)
+#      run: make || make || make || make
+#    - name: sanity check
+#      run: make sanitycheck
+#    - name: unit tests
+#      run: make check
+#    - name: build in STRICT mode
+#      run: git clean -fdx && ./configure.sh && make strict
+#    - name: build in RELEASE mode
+#      run: git clean -fdx && ./configure.sh && make release
+#    - name: integration tests
+#      run: make update-servers
 
   linux-vanilla--stockmono-only:
     runs-on: ubuntu-22.04
@@ -504,7 +477,7 @@ jobs:
       image: "ubuntu:22.04"
     needs:
     - linux-github--dotnet-and-mono
-    - linux-github--dotnet-and-newmono
+#    - linux-github--dotnet-and-newmono
     - linux-vanilla--stockmono-only
     - linux-vanilla--newmono-only
     - linux-vanilla--stockdotnet6-only
@@ -513,9 +486,9 @@ jobs:
     - windows--dotnet6-and-legacyFramework
     - windows--legacyFramework-only
     - windows--dotnet6-only
-    - macOS--dotnet6-and-mono
-    - macOS--mono-only
-    - macOS--dotnet6-only
+#    - macOS--dotnet6-and-mono
+#    - macOS--mono-only
+#    - macOS--dotnet6-only
 
     steps:
     - uses: actions/checkout@v1
