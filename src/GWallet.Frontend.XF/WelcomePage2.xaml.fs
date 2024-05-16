@@ -66,7 +66,7 @@ type WelcomePage2(state: FrontendHelpers.IGlobalAppState, masterPrivateKeyGenera
                 let! privateKeyBytes = Async.AwaitTask masterPrivateKeyGenerationTask
                 do! Account.CreateAllAccounts privateKeyBytes password.Text
                 let loadingPage () =
-                    LoadingPage (state, false)
+                    LoadingPage ()
                         :> Page
                 FrontendHelpers.SwitchToNewPageDiscardingCurrentOne self loadingPage
             } |> FrontendHelpers.DoubleCheckCompletionAsync false
