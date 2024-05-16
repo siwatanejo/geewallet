@@ -5,56 +5,13 @@
              xmlns:zx="clr-namespace:ZXing.Net.Mobile.Forms;assembly=ZXing.Net.Mobile.Forms"
              xmlns:zxcm="clr-namespace:ZXing.Common;assembly=zxing">
     <Grid x:Name="mainLayout"
-          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+          RowDefinitions="*"
           Padding="10,10,10,10"
           VerticalOptions="Center"
     >
         <Label x:Name="balanceLabel"
-               Text="..."
+               Text="Receive page"
                HorizontalOptions="Center"
-               Grid.Row="0"
-        />
-        <Image
-            x:Name="currencyImage"
-            IsVisible="false"
-            Grid.Row="1"
-        />
-        <Label x:Name="fiatBalanceLabel"
-               Text="..."
-               HorizontalOptions="Center"
-               Grid.Row="2"
-        />
-        <Button x:Name="paymentButton"
-                Text="..."
-                IsEnabled="false"
-                HorizontalOptions="Center"
-                Clicked="OnSendPaymentClicked"
-                Grid.Row="3"
-        />
-        <Button x:Name="copyToClipboardButton"
-                Text="Copy address to clipboard"
-                IsEnabled="true"
-                HorizontalOptions="Center"
-                Clicked="OnCopyToClipboardClicked"
-                Grid.Row="4"
-        />
-        <zx:ZXingBarcodeImageView
-            x:Name="qrCode"
-            HorizontalOptions="Center"
-            VerticalOptions="Center"
-            IsVisible="false"
-            WidthRequest="200"
-            HeightRequest="200"
-            Grid.Row="5"
-            >
-        </zx:ZXingBarcodeImageView>
-        <Button
-            x:Name="viewTransactionHistoryButton"
-            Text="View transaction history..."
-            IsEnabled="true"
-            HorizontalOptions="Center"
-            Clicked="OnViewTransactionHistoryClicked"
-            Grid.Row="6"
-            />
+               Grid.Row="0"></Label>
     </Grid>
 </ContentPage>
