@@ -182,7 +182,7 @@ type BalancesPage(state: FrontendHelpers.IGlobalAppState,
                
                 tapGestureRecognizer.Tapped.Subscribe(fun _ ->
                     let receivePage () =
-                        ReceivePage(balanceSet.Account, readOnly, balanceState.UsdRate, self, balanceSet.Widgets)
+                        ReceivePage()
                             :> Page
                     FrontendHelpers.SwitchToNewPage self receivePage true
                 ) |> ignore
