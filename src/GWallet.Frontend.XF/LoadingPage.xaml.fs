@@ -123,8 +123,7 @@ type LoadingPage(state: FrontendHelpers.IGlobalAppState, showLogoFirst: bool) as
             keepAnimationTimerActive <- false
 
             let balancesPage () =
-                BalancesPage(state, allResolvedNormalAccountBalances, allResolvedReadOnlyBalances,
-                             currencyImages, false)
+                BalancesPage()
                     :> Page
             FrontendHelpers.SwitchToNewPageDiscardingCurrentOne self balancesPage
         }
