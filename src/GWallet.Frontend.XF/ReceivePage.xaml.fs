@@ -83,36 +83,9 @@ type ReceivePage(account: IAccount,
 
         let accountBalance =
             Caching.Instance.RetrieveLastCompoundBalance account.PublicAddress account.Currency
-        FrontendHelpers.UpdateBalance
-            (NotFresh accountBalance)
-            account.Currency
-            usdRate
-            None
-            balanceLabel
-            fiatBalanceLabel
-            None
-            |> ignore
-
-        // this below is for the case when a new ReceivePage() instance is suddenly created after sending a transaction
-        // (we need to update the balance page ASAP in case the user goes back to it after sending the transaction)
-        FrontendHelpers.UpdateBalance (NotFresh accountBalance)
-                                      account.Currency
-                                      usdRate
-                                      (Some balanceWidgetsFromBalancePage.Frame)
-                                      balanceWidgetsFromBalancePage.CryptoLabel
-                                      balanceWidgetsFromBalancePage.FiatLabel
-                                      None
-            |> ignore
 
         balanceLabel.FontSize <- FrontendHelpers.BigFontSize
         fiatBalanceLabel.FontSize <- FrontendHelpers.MediumFontSize
-
-        if account.Currency = Currency.BTC then
-            let cryptoTapGestureRecognizer = TapGestureRecognizer()
-            cryptoTapGestureRecognizer.Tapped.Subscribe(
-                fun _ -> TapCryptoAmountLabel accountBalance
-            ) |> ignore
-            balanceLabel.GestureRecognizers.Add cryptoTapGestureRecognizer
 
         let qrCode =
 #if XAMARIN          
@@ -144,6 +117,7 @@ type ReceivePage(account: IAccount,
             paymentButton.Text <- paymentCaptionInColdStorage
             paymentButton.IsEnabled <- true
             transactionHistoryButton.IsEnabled <- false
+        paymentButton.IsEnabled <- true
 
         let imageSize = CurrencyImageSize.Big
         currencyImg.Source <-
@@ -174,7 +148,13 @@ type ReceivePage(account: IAccount,
         BlockExplorer.GetTransactionHistory account
             |> Launcher.OpenAsync
             |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-
+    (*
+    override self.OnBackButtonPressed() =
+        MainThread.BeginInvokeOnMainThread(fun _ ->
+            balancesPage.Navigation.PopAsync() |> FrontendHelpers.DoubleCheckCompletion
+        )
+        true
+    *)
     member self.OnSendPaymentClicked(_sender: Object, _args: EventArgs) =
         let newReceivePageFunc = (fun _ ->
             ReceivePage(account, readOnly, usdRate, balancesPage, balanceWidgetsFromBalancePage) :> Page

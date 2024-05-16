@@ -148,70 +148,10 @@ type SendPage(account: IAccount, receivePage: Page, newReceivePageFunc: unit->Pa
             )
 
     member self.OnTransactionScanQrCodeButtonClicked(_sender: Object, _args: EventArgs): unit =
-        let mainLayout = base.FindByName<Grid> "mainLayout"
-        let transactionEntry = mainLayout.FindByName<Entry> "transactionEntry"
-        let scanPage = 
-            FrontendHelpers.GetBarcodeScannerPage 
-                (fun barcodeString ->
-                    MainThread.BeginInvokeOnMainThread(fun _ ->
-                        // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
-                        //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                        let task = FrontendHelpers.TryPopModalAsync self
-                        transactionEntry.Text <- barcodeString
-                        task |> FrontendHelpers.DoubleCheckCompletionNonGeneric) )
-
-        MainThread.BeginInvokeOnMainThread(fun _ ->
-            // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
-            //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-            self.Navigation.PushModalAsync scanPage
-                |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-        )
+        ()
 
     member self.OnScanQrCodeButtonClicked(_sender: Object, _args: EventArgs): unit =
-        let mainLayout = base.FindByName<Grid> "mainLayout"
-
-        let onScan barcodeText =
-            if String.IsNullOrEmpty barcodeText then
-                failwith "result of scanning was null(?)"
-
-            MainThread.BeginInvokeOnMainThread(fun _ ->
-                // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
-                //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-                let task = FrontendHelpers.TryPopModalAsync self
-
-                let address,maybeAmount =
-                    match account.Currency with
-                    | Currency.BTC
-                    | Currency.LTC ->
-                        UtxoCoin.Account.ParseAddressOrUrl barcodeText account.Currency
-                    | _ -> barcodeText,None
-
-                destinationAddressEntry.Text <- address
-                match maybeAmount with
-                | None -> ()
-                | Some amount ->
-                    let amountLabel = mainLayout.FindByName<Entry>("amountToSend")
-                    let cryptoCurrencyInPicker =
-                        currencySelectorPicker.Items.FirstOrDefault(
-                            fun item -> item.ToString() = account.Currency.ToString()
-                        )
-                    if isNull cryptoCurrencyInPicker then
-                        failwith <| SPrintF1 "Could not find currency %A in picker?" account.Currency
-                    currencySelectorPicker.SelectedItem <- cryptoCurrencyInPicker
-                    let aPreviousAmountWasSet = not (String.IsNullOrWhiteSpace amountLabel.Text)
-                    amountLabel.Text <- amount.ToString()
-                    if aPreviousAmountWasSet then
-                        self.DisplayAlert("Alert", "Note: new amount has been set", "OK")
-                            |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-                task |> FrontendHelpers.DoubleCheckCompletionNonGeneric
-            )
-        
-        let scanPage = FrontendHelpers.GetBarcodeScannerPage onScan
-
-        // NOTE: modal because otherwise we would see a 2nd topbar added below the 1st topbar when scanning
-        //       (saw this behaviour on Android using Xamarin.Forms 3.0.x, re-test/file bug later?)
-        self.Navigation.PushModalAsync scanPage
-            |> FrontendHelpers.DoubleCheckCompletionNonGeneric
+        ()
 
     member __.OnAllBalanceButtonClicked(_sender: Object, _args: EventArgs): unit =
         match cachedBalanceAtPageCreation with

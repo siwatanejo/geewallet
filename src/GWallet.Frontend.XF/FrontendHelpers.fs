@@ -290,6 +290,9 @@ module FrontendHelpers =
         if isNull ex then
             ()
         else
+#if ANDROID
+            Android.Util.Log.Error("Errors", ex.ToString()) |> ignore
+#endif
             let shouldCrash =
                 if not canBeCanceled then
                     true
@@ -337,15 +340,55 @@ module FrontendHelpers =
 #endif            
             let navPage = NavigationPage newPage
             NavigationPage.SetHasNavigationBar(navPage, navBar)
+#if ANDROID
+            Android.Util.Log.Error("Errors", "Switching to new page") |> ignore
+            Android.Util.Log.Error("Errors", sprintf "NavPage Handler = %A" navPage.Handler) |> ignore
+            navPage.HandlerChanged.Add(fun _e -> 
+                try
+                    Android.Util.Log.Error("Errors", sprintf "NavPage.Handler = %A" navPage.Handler) |> ignore
+                    Android.Util.Log.Error("Errors", sprintf "NavPage.Handler.MauiContext = %A" navPage.Handler.MauiContext) |> ignore
+                    Android.Util.Log.Error("Errors", sprintf "NavPage.Handler.MauiContext.Context = %A" navPage.Handler.MauiContext.Context) |> ignore
+                with
+                | :? NullReferenceException -> ()
+            )
+            navPage.LayoutChanged.Add(fun _e -> 
+                try
+                    Android.Util.Log.Error("Errors", sprintf "(LayoutChanged)Handler = %A" navPage.Handler) |> ignore
+                    Android.Util.Log.Error("Errors", sprintf "(LayoutChanged)Handler.MauiContext = %A" navPage.Handler.MauiContext) |> ignore
+                    Android.Util.Log.Error("Errors", sprintf "(LayoutChanged)Handler.MauiContext.Context = %A" navPage.Handler.MauiContext.Context) |> ignore
+                with
+                | :? NullReferenceException -> ()
+            )
+
+            Android.Util.Log.Error("Errors", sprintf  "currentPage Navigation stack (before push) = %A" (currentPage.Navigation.NavigationStack.ToArray())) |> ignore
+            Android.Util.Log.Error("Errors", sprintf  "navPage Navigation stack (before push) = %A" (navPage.Navigation.NavigationStack.ToArray())) |> ignore
+#endif
 
             currentPage.Navigation.PushAsync navPage
                 |> DoubleCheckCompletionNonGeneric
+
+            //navPage.Navigation.InsertPageBefore(currentPage, newPage)
+
+            Android.Util.Log.Error("Errors", sprintf  "currentPage Navigation stack (after push) = %A" (currentPage.Navigation.NavigationStack.ToArray())) |> ignore
+            Android.Util.Log.Error("Errors", sprintf  "navPage Navigation stack (after push) = %A" (navPage.Navigation.NavigationStack.ToArray())) |> ignore
         )
 
     let SwitchToNewPageDiscardingCurrentOne (currentPage: Page) (createNewPage: unit -> Page): unit =
         MainThread.BeginInvokeOnMainThread(fun _ ->
             let newPage = createNewPage ()
             NavigationPage.SetHasNavigationBar(newPage, false)
+
+#if ANDROID
+            Android.Util.Log.Error("Errors", "Switching to new page discarding current one") |> ignore
+            currentPage.HandlerChanged.Add(fun _e -> 
+                try
+                    Android.Util.Log.Error("Errors", sprintf "Handler = %A" currentPage.Handler) |> ignore
+                    Android.Util.Log.Error("Errors", sprintf "Handler.MauiContext = %A" currentPage.Handler.MauiContext) |> ignore
+                    Android.Util.Log.Error("Errors", sprintf "Handler.MauiContext.Context = %A" currentPage.Handler.MauiContext.Context) |> ignore
+                with
+                | :? NullReferenceException -> ()
+            )
+#endif
 
             currentPage.Navigation.InsertPageBefore(newPage, currentPage)
             currentPage.Navigation.PopAsync()
