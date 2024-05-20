@@ -8,7 +8,11 @@ type App() as this =
     inherit Application()
 
     do this.LoadFromXaml typeof<App> |> ignore<App>
-    do this.MainPage <- Initialization.LandingPage()
+    do 
+        let firstPage = new LoadingPage()
+        let navPage = new NavigationPage(firstPage)
+        NavigationPage.SetHasNavigationBar(firstPage, false)
+        this.MainPage <- navPage
 
 #if GTK
     override _.CreateWindow(activationState) = 
