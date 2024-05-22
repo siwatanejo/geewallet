@@ -686,9 +686,9 @@ jobs:
         name: snap_alpha
         path: ./*.snap
     
-    - name: Upload snap package to Snap Store
-      env:
-        SNAPCRAFT_STORE_CREDENTIALS: ${{secrets.SNAPCRAFT_LOGIN}}
-      run: |
-        sudo apt update
-        ./scripts/snap_release.sh edge
+#    - name: Upload snap package to Snap Store
+#      env:
+#        SNAPCRAFT_STORE_CREDENTIALS: ${{secrets.SNAPCRAFT_LOGIN}}
+#      run: |
+#        sudo apt update
+#        ./scripts/snap_release.sh edge

@@ -7,6 +7,9 @@ open Microsoft.Maui.Graphics
 open Microsoft.Maui.Hosting 
 
 type GtkApp() = 
-    inherit MauiGtkApplication(Name = null)
+    inherit MauiGtkApplication()
+    
+    // force Gtk to not use DBus
+    override _.ApplicationId = null
 
     override _.CreateMauiApp() = MauiProgram.CreateMauiApp()
