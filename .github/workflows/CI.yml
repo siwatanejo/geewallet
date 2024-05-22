@@ -645,9 +645,6 @@ jobs:
         ./scripts/snap_release.sh beta
 
   snap_alpha:
-  
-    needs:
-    - conventions
 
     runs-on: ubuntu-22.04
     env:

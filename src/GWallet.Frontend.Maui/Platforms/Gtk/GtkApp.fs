@@ -7,6 +7,6 @@ open Microsoft.Maui.Graphics
 open Microsoft.Maui.Hosting 
 
 type GtkApp() = 
-    inherit MauiGtkApplication()
+    inherit MauiGtkApplication(Name = null)
 
     override _.CreateMauiApp() = MauiProgram.CreateMauiApp()
